@@ -5,109 +5,72 @@ import { signIn } from "next-auth/react";
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: "linear-gradient(160deg, #001340 0%, #002B80 45%, #001a5e 100%)" }}>
+      style={{ background: "#0d1b3e" }}>
 
-      {/* Decorative arcs */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} preserveAspectRatio="xMidYMid slice">
-        <ellipse cx="50%" cy="115%" rx="68%" ry="52%" fill="none" stroke="#1a4db3" strokeWidth="1" opacity="0.5"/>
-        <ellipse cx="50%" cy="112%" rx="58%" ry="44%" fill="none" stroke="#F5C518" strokeWidth="1" opacity="0.18"/>
-        <ellipse cx="50%" cy="109%" rx="46%" ry="36%" fill="none" stroke="#1a4db3" strokeWidth="1" opacity="0.35"/>
-      </svg>
+      {/* Subtle radial glow behind logo */}
+      <div style={{
+        position: "absolute", top: "15%", left: "50%", transform: "translateX(-50%)",
+        width: 320, height: 320, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(245,197,24,0.06) 0%, transparent 70%)",
+        pointerEvents: "none",
+      }} />
 
-      <div className="relative w-full max-w-xs flex flex-col items-center" style={{ zIndex: 1 }}>
+      <div className="relative w-full max-w-xs flex flex-col items-center">
 
-        {/* SVG Logo */}
-        <div className="w-52 h-52 mb-2 drop-shadow-2xl">
-          <AppIcon />
+        {/* Minimal logo */}
+        <div className="w-40 h-40 mb-5">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+            <circle cx="256" cy="210" r="168" fill="none" stroke="#F5C518" strokeWidth="1.5" opacity="0.3"/>
+            <polygon points="272,58 246,188 264,188 228,335 298,170 272,170 306,58" fill="white" opacity="0.92"/>
+            <polygon points="272,74 250,180 265,180 234,308 292,176 268,176 300,74" fill="#F5C518" opacity="0.5"/>
+            <path d="M 90 355 Q 256 396 422 355" stroke="#F5C518" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity="0.55"/>
+            <text x="256" y="435" textAnchor="middle"
+              fontFamily="'Arial Black','Helvetica Neue',sans-serif"
+              fontSize="70" fontWeight="900" fontStyle="italic" fill="white">กบห-ธ.</text>
+            <text x="256" y="478" textAnchor="middle"
+              fontFamily="Arial,sans-serif" fontSize="22" fontWeight="600"
+              fill="#F5C518" opacity="0.75">กฟผ. สนง.ไทรน้อย</text>
+          </svg>
         </div>
 
-        {/* Brand text */}
-        <div className="text-center mb-6 w-full">
-          <div className="flex items-center gap-2 justify-center mb-1.5">
-            <span style={{ flex: 1, height: 1.5, background: "linear-gradient(to right, transparent, #F5C518)" }}/>
-            <span className="text-xs font-bold tracking-widest uppercase" style={{ color: "#F5C518" }}>ระบบบันทึกการฝึกงาน</span>
-            <span style={{ flex: 1, height: 1.5, background: "linear-gradient(to left, transparent, #F5C518)" }}/>
+        {/* Tagline */}
+        <div className="text-center mb-7 w-full">
+          <div className="flex items-center gap-2 justify-center mb-1">
+            <span style={{ flex: 1, height: 1, background: "linear-gradient(to right, transparent, rgba(245,197,24,0.4))" }}/>
+            <span className="text-xs tracking-[0.2em] uppercase"
+              style={{ color: "rgba(245,197,24,0.7)", fontWeight: 600 }}>ระบบบันทึกการฝึกงาน</span>
+            <span style={{ flex: 1, height: 1, background: "linear-gradient(to left, transparent, rgba(245,197,24,0.4))" }}/>
           </div>
-          <p className="text-sm font-medium" style={{ color: "#a8c4ff" }}>กองบริหาร การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย</p>
-          <p className="text-xs mt-0.5" style={{ color: "#7aa0e0" }}>สำนักงานไทรน้อย</p>
+          <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>
+            การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย สำนักงานไทรน้อย
+          </p>
         </div>
 
-        {/* Card */}
+        {/* Login card */}
         <div className="w-full rounded-2xl overflow-hidden"
           style={{
-            background: "rgba(255,255,255,0.07)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.4)"
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
           }}>
-
-          <div className="px-6 pt-6 pb-5">
-            <p className="text-center text-sm font-semibold mb-4" style={{ color: "rgba(255,255,255,0.9)" }}>เข้าสู่ระบบ</p>
+          <div className="px-6 py-5">
             <button
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
               className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-95"
-              style={{ background: "white", color: "#1a1a1a", boxShadow: "0 2px 12px rgba(0,0,0,0.25)" }}>
+              style={{ background: "white", color: "#1a1a1a" }}>
               <GoogleIcon />
               เข้าสู่ระบบด้วย Google
             </button>
           </div>
 
-          {/* Admin strip */}
-          <div className="px-5 py-3 text-center"
-            style={{ background: "rgba(0,0,0,0.25)", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-            <p className="text-xs font-bold mb-0.5" style={{ color: "#F5C518" }}>ผู้ดูแลระบบ</p>
-            <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>นายตวงเพชร ชัยยานนท์ วศ.4</p>
-            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>หบอว-ธ. &nbsp;·&nbsp; กบห-ธ. &nbsp;·&nbsp; ชธธ.</p>
+          {/* Admin info — subtle */}
+          <div className="px-6 pb-4 text-center">
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+              ผู้ดูแล: นายตวงเพชร ชัยยานนท์ &nbsp;·&nbsp; หบอว-ธ. กบห-ธ. ชธธ.
+            </p>
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-function AppIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-      <defs>
-        <clipPath id="cc">
-          <circle cx="256" cy="218" r="165"/>
-        </clipPath>
-      </defs>
-      <rect width="512" height="512" rx="100" fill="#002B80"/>
-      <circle cx="256" cy="218" r="160" fill="none" stroke="#1a4db3" stroke-width="7" opacity="0.6"/>
-      <circle cx="256" cy="218" r="152" fill="none" stroke="#F5C518" stroke-width="1.5" opacity="0.3"/>
-
-      {/* Plant silhouette */}
-      <g clipPath="url(#cc)" fill="#1a4db3">
-        <rect x="100" y="270" width="84" height="68" rx="2"/>
-        <rect x="92" y="258" width="100" height="17" rx="2"/>
-        <rect x="88" y="330" width="108" height="16" rx="0" opacity="0.45"/>
-        <rect x="196" y="246" width="55" height="100" rx="2"/>
-        <rect x="184" y="234" width="79" height="19" rx="2"/>
-        <rect x="200" y="202" width="13" height="38"/>
-        <rect x="224" y="212" width="11" height="29"/>
-        <polygon points="295,355 311,208 327,355"/>
-        <rect x="295" y="355" width="32" height="6" rx="1"/>
-        <rect x="299" y="292" width="24" height="4" rx="1"/>
-        <rect x="302" y="258" width="18" height="3" rx="1"/>
-      </g>
-
-      {/* Lightning bolt */}
-      <polygon points="280,62 248,215 270,215 226,368 308,186 278,186 322,62" fill="#F5C518"/>
-      <polygon points="280,78 260,202 274,202 244,342 300,192 272,192 314,78" fill="#FFE066" opacity="0.4"/>
-
-      {/* Bottom arc */}
-      <path d="M 90 385 Q 256 428 422 385" stroke="#F5C518" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <path d="M 102 396 Q 256 438 410 396" stroke="#F5C518" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.35"/>
-
-      {/* Text */}
-      <text x="256" y="444" textAnchor="middle"
-        fontFamily="'Arial Black','Helvetica Neue',sans-serif"
-        fontSize="64" fontWeight="900" fontStyle="italic"
-        stroke="#001a5e" strokeWidth="5" paintOrder="stroke" fill="white">กบห-ธ.</text>
-      <text x="256" y="480" textAnchor="middle"
-        fontFamily="Arial,sans-serif" fontSize="20" fontWeight="700" fill="#F5C518">กฟผ. สนง.ไทรน้อย</text>
-    </svg>
   );
 }
 
