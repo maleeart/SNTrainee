@@ -17,13 +17,35 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const { date, title, description, tasks } = body;
+  const b = await req.json();
+  const date = new Date(b.date);
+
+  const existing = await prisma.report.findUnique({
+    where: { userId_date: { userId: session.user.id, date } },
+  });
+  if (existing?.status === "APPROVED") {
+    return NextResponse.json({ error: "รายงานนี้อนุมัติแล้ว แก้ไขไม่ได้" }, { status: 400 });
+  }
+
+  // resubmit after edit → กลับไปรอสถานะที่เหมาะสม
+  const status = existing?.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
+
+  const data = {
+    title: b.title,
+    description: b.description,
+    tasks: b.tasks ?? [],
+    jobType: b.jobType || null,
+    systemCategory: b.systemCategory || null,
+    location: b.location || null,
+    tools: b.tools ?? [],
+    ppe: b.ppe ?? [],
+    learned: b.learned || null,
+  };
 
   const report = await prisma.report.upsert({
-    where: { userId_date: { userId: session.user.id, date: new Date(date) } },
-    update: { title, description, tasks },
-    create: { userId: session.user.id, date: new Date(date), title, description, tasks },
+    where: { userId_date: { userId: session.user.id, date } },
+    update: { ...data, status },
+    create: { ...data, userId: session.user.id, date, status: "PENDING_ASSIGN" },
   });
   return NextResponse.json(report);
 }
