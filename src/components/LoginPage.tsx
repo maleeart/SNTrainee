@@ -3,52 +3,41 @@
 import { signIn } from "next-auth/react";
 
 // concept.png = 1254×1254px
-// Dark blue app icon area ≈ x:450-800, y:680-1120 (350×440px)
-// Scale by icon width to fill 180px: 180/350 = 0.514 → scaled image = 645px
-// offset-x: -(450×0.514) = -231px  offset-y: -(680×0.514) = -350px
-const ICON_STYLE: React.CSSProperties = {
-  width: 180,
-  height: 180,
-  overflow: "hidden",
-  borderRadius: 32,
+// White-bg logo area: x:20-680, y:10-660 (660×650px)
+// Display at 280px wide → scale = 280/660 = 0.424
+// background-size: 1254×0.424 = 532px
+// offset-x: -(20×0.424) = -8px   offset-y: -(10×0.424) = -4px
+// container height: 650×0.424 = 276px
+const LOGO_STYLE: React.CSSProperties = {
+  width: 280,
+  height: 276,
   backgroundImage: "url('/concept.png')",
-  backgroundSize: "645px",
-  backgroundPosition: "-231px -350px",
+  backgroundSize: "532px",
+  backgroundPosition: "-8px -4px",
   backgroundRepeat: "no-repeat",
-  flexShrink: 0,
 };
 
 export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{ background: "#003E8E" }}
+      style={{ background: "#f0f4fb" }}
     >
-      <div className="w-full max-w-xs flex flex-col items-center gap-6">
+      <div className="w-full max-w-sm flex flex-col items-center gap-4">
 
-        {/* Logo — cropped from concept.png */}
-        <div style={ICON_STYLE} />
-
-        {/* Brand text */}
-        <div className="text-center">
-          <p className="text-xs tracking-[0.18em] font-semibold mb-1"
-            style={{ color: "#FFC000" }}>
-            ระบบบันทึกการฝึกงาน
-          </p>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-            กองบริหาร การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย สำนักงานไทรน้อย
-          </p>
-        </div>
+        {/* Logo — cropped from concept.png white-bg version */}
+        <div style={LOGO_STYLE} />
 
         {/* Login card */}
         <div
-          className="w-full rounded-2xl overflow-hidden"
-          style={{
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.14)",
-          }}
+          className="w-full rounded-2xl overflow-hidden shadow-xl"
+          style={{ background: "#003E8E" }}
         >
-          <div className="px-6 py-5">
+          <div className="px-6 pt-6 pb-2">
+            <p className="text-center text-sm font-semibold mb-4"
+              style={{ color: "rgba(255,255,255,0.9)" }}>
+              เข้าสู่ระบบ
+            </p>
             <button
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
               className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-95"
@@ -61,8 +50,8 @@ export default function LoginPage() {
 
           {/* Admin — one line, very subtle */}
           <p
-            className="text-center text-xs pb-4 px-4"
-            style={{ color: "rgba(255,255,255,0.28)" }}
+            className="text-center text-xs py-4 px-4"
+            style={{ color: "rgba(255,255,255,0.3)" }}
           >
             ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
           </p>
