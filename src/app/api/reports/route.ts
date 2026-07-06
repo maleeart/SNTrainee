@@ -30,6 +30,11 @@ export async function POST(req: NextRequest) {
   // resubmit after edit → กลับไปรอสถานะที่เหมาะสม
   const status = existing?.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
 
+  // เมื่อแก้ไข report ที่มีอยู่ ต้องระบุเหตุผล
+  if (existing && !b.editReason?.trim()) {
+    return NextResponse.json({ error: "กรุณาระบุเหตุผลที่แก้ไข" }, { status: 400 });
+  }
+
   const data = {
     title: b.title,
     description: b.description,
@@ -40,6 +45,8 @@ export async function POST(req: NextRequest) {
     tools: b.tools ?? [],
     ppe: b.ppe ?? [],
     learned: b.learned || null,
+    images: b.images ?? [],
+    editReason: b.editReason || null,
   };
 
   const report = await prisma.report.upsert({

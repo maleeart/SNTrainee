@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { Report } from "@prisma/client";
 import {
   JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR,
@@ -10,20 +10,45 @@ import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; image?: string | null; role?: string };
 type Scores = Record<string, number>;
+type ReportEx = Report & { images: string[]; editReason: string | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
-export default function Dashboard({ user, initialReports }: { user: User; initialReports: Report[] }) {
-  const [reports, setReports] = useState<Report[]>(initialReports);
-  const [editing, setEditing] = useState<Report | null>(null);
-  const [taskInput, setTaskInput] = useState("");
+// compress image with Canvas before upload — target ≤ 800px, quality 0.75 JPEG (like Squoosh default)
+async function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1200;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => { URL.revokeObjectURL(url); b ? resolve(b) : reject(new Error("compress failed")); }, "image/jpeg", 0.75);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+export default function Dashboard({ user, initialReports }: { user: User; initialReports: ReportEx[] }) {
+  const [reports, setReports] = useState<ReportEx[]>(initialReports);
+  const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const blank = (): Report => ({
+  const blank = (): ReportEx => ({
     id: "", date: new Date(today), title: "", description: "", tasks: [],
     jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null,
+    images: [], editReason: null,
     userId: user.id ?? "", assignedMentorId: null, status: "PENDING_ASSIGN",
     mentorComment: null, scores: null, evaluatedAt: null,
     createdAt: new Date(), updatedAt: new Date(),
@@ -32,12 +57,14 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
   const save = async () => {
     if (!editing) return;
     if (!editing.title.trim()) return alert("กรุณากรอกหัวข้องาน");
+    const isEdit = !!editing.id;
+    if (isEdit && !editing.editReason?.trim()) return alert("กรุณาระบุเหตุผลที่แก้ไข");
     const res = await fetch("/api/reports", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...editing, date: iso(editing.date) }),
     });
     if (!res.ok) return alert((await res.json()).error ?? "บันทึกไม่สำเร็จ");
-    const saved: Report = await res.json();
+    const saved: ReportEx = await res.json();
     setReports(prev => {
       const i = prev.findIndex(r => r.id === saved.id);
       if (i >= 0) { const n = [...prev]; n[i] = saved; return n; }
@@ -52,9 +79,30 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     setReports(prev => prev.filter(r => r.id !== id));
   };
 
-  const set = (patch: Partial<Report>) => setEditing(e => (e ? { ...e, ...patch } : e));
+  const set = (patch: Partial<ReportEx>) => setEditing(e => (e ? { ...e, ...patch } : e));
 
-  // สรุปคะแนนเฉลี่ยจากงานที่ประเมินแล้ว
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || !editing) return;
+    if ((editing.images?.length ?? 0) + files.length > 5) return alert("แนบรูปได้สูงสุด 5 รูปต่อรายงาน");
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const file of files) {
+        const compressed = await compressImage(file);
+        const form = new FormData();
+        form.append("file", compressed, file.name.replace(/\.[^.]+$/, ".jpg"));
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        if (!res.ok) { alert("อัพโหลดรูปไม่สำเร็จ"); break; }
+        urls.push((await res.json()).url);
+      }
+      set({ images: [...(editing.images ?? []), ...urls] });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   const scored = reports.filter(r => r.scores);
   const avg = scored.length
     ? (scored.reduce((s, r) => {
@@ -73,7 +121,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
             <h1 className="text-2xl font-bold text-gray-800">บันทึกการฝึกงาน</h1>
             <p className="text-gray-500 text-sm mt-0.5">งานช่างไฟฟ้า อาคารและบริเวณ</p>
           </div>
-          <button onClick={() => { setEditing(blank()); setTaskInput(""); setToolInput(""); }}
+          <button onClick={() => { setEditing(blank()); setToolInput(""); }}
             className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
             style={{ background: "#003E8E" }}>
             <span className="text-lg leading-none">+</span> บันทึกวันใหม่
@@ -121,10 +169,19 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                         ))}
                       </div>
                     )}
+                    {r.images?.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {r.images.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" className="h-16 w-16 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     {r.status !== "APPROVED" && (
-                      <button onClick={() => { setEditing(r); setTaskInput(""); setToolInput(""); }} className="text-sm text-blue-600 hover:text-blue-800 font-medium">แก้ไข</button>
+                      <button onClick={() => { setEditing({ ...r }); setToolInput(""); }} className="text-sm font-medium" style={{ color: "#003E8E" }}>แก้ไข</button>
                     )}
                     <button onClick={() => del(r.id)} className="text-sm text-red-400 hover:text-red-600">ลบ</button>
                   </div>
@@ -184,9 +241,45 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                 <F label="ปัญหา / สิ่งที่เรียนรู้">
                   <textarea rows={2} className="input resize-none" value={editing.learned ?? ""} onChange={e => set({ learned: e.target.value })} />
                 </F>
+
+                {/* Image upload */}
+                <F label="รูปภาพประกอบ (สูงสุด 5 รูป)">
+                  <div className="space-y-2">
+                    {editing.images?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {editing.images.map((url, i) => (
+                          <div key={i} className="relative group">
+                            <img src={url} alt="" className="h-20 w-20 object-cover rounded-lg border border-gray-200" />
+                            <button onClick={() => set({ images: editing.images.filter((_, x) => x !== i) })}
+                              className="absolute top-0.5 right-0.5 bg-black/60 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImagePick} />
+                    <button type="button" disabled={uploading || (editing.images?.length ?? 0) >= 5}
+                      onClick={() => fileRef.current?.click()}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50">
+                      {uploading ? "กำลังบีบอัดและอัพโหลด..." : "📷 เพิ่มรูปภาพ"}
+                    </button>
+                    <p className="text-xs text-gray-400">รูปจะถูกบีบอัดอัตโนมัติก่อนอัพโหลด</p>
+                  </div>
+                </F>
+
+                {/* Edit reason — required when editing existing report */}
+                {editing.id && (
+                  <F label="เหตุผลที่แก้ไข *">
+                    <textarea rows={2} className="input resize-none border-amber-200 bg-amber-50/30"
+                      value={editing.editReason ?? ""}
+                      onChange={e => set({ editReason: e.target.value })}
+                      placeholder="ระบุสาเหตุหรือสิ่งที่ต้องการแก้ไข..." />
+                  </F>
+                )}
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={save} className="flex-1 bg-blue-700 hover:bg-blue-800 text-white py-2.5 rounded-xl font-medium">บันทึก</button>
+                <button onClick={save} disabled={uploading} className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-50" style={{ background: "#003E8E" }}>บันทึก</button>
                 <button onClick={() => setEditing(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ยกเลิก</button>
               </div>
             </div>
@@ -196,7 +289,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
 
       <style jsx global>{`
         .input { width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; outline: none; }
-        .input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+        .input:focus { border-color: #003E8E; box-shadow: 0 0 0 2px rgba(0,62,142,0.15); }
       `}</style>
     </div>
   );
@@ -213,12 +306,12 @@ function ChipInput({ value, setValue, items, onAdd, onRemove, placeholder }: {
         <input className="input flex-1" value={value} placeholder={placeholder}
           onChange={e => setValue(e.target.value)}
           onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())} />
-        <button onClick={add} className="bg-blue-100 text-blue-700 px-3 rounded-lg hover:bg-blue-200 text-sm font-medium">เพิ่ม</button>
+        <button onClick={add} className="px-3 rounded-lg text-sm font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>เพิ่ม</button>
       </div>
       <div className="flex flex-wrap gap-1">
         {items.map((t, i) => (
-          <span key={i} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-            {t}<button onClick={() => onRemove(i)} className="text-blue-400 hover:text-red-500 ml-0.5">×</button>
+          <span key={i} className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: "#EEF2FF", color: "#003E8E" }}>
+            {t}<button onClick={() => onRemove(i)} className="hover:text-red-500 ml-0.5">×</button>
           </span>
         ))}
       </div>

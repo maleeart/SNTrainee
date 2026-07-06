@@ -110,6 +110,8 @@ model Report {
   tools          String[]        @default([])
   ppe            String[]        @default([]) // รายการความปลอดภัยที่ทำ
   learned        String?         @db.Text // ปัญหา/สิ่งที่เรียนรู้
+  images         String[]        @default([]) // URLs รูปภาพประกอบ
+  editReason     String?         @db.Text // เหตุผลที่แก้ไข
 
   userId String
   user   User   @relation("StudentReports", fields: [userId], references: [id], onDelete: Cascade)
