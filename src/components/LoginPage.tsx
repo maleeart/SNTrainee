@@ -2,72 +2,70 @@
 
 import { signIn } from "next-auth/react";
 
+// concept.png = 1254×1254px
+// Dark blue app icon area ≈ x:450-800, y:680-1120 (350×440px)
+// Scale by icon width to fill 180px: 180/350 = 0.514 → scaled image = 645px
+// offset-x: -(450×0.514) = -231px  offset-y: -(680×0.514) = -350px
+const ICON_STYLE: React.CSSProperties = {
+  width: 180,
+  height: 180,
+  overflow: "hidden",
+  borderRadius: 32,
+  backgroundImage: "url('/concept.png')",
+  backgroundSize: "645px",
+  backgroundPosition: "-231px -350px",
+  backgroundRepeat: "no-repeat",
+  flexShrink: 0,
+};
+
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: "#0d1b3e" }}>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6"
+      style={{ background: "#003E8E" }}
+    >
+      <div className="w-full max-w-xs flex flex-col items-center gap-6">
 
-      {/* Subtle radial glow behind logo */}
-      <div style={{
-        position: "absolute", top: "15%", left: "50%", transform: "translateX(-50%)",
-        width: 320, height: 320, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(245,197,24,0.06) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
+        {/* Logo — cropped from concept.png */}
+        <div style={ICON_STYLE} />
 
-      <div className="relative w-full max-w-xs flex flex-col items-center">
-
-        {/* Minimal logo */}
-        <div className="w-40 h-40 mb-5">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-            <circle cx="256" cy="210" r="168" fill="none" stroke="#F5C518" strokeWidth="1.5" opacity="0.3"/>
-            <polygon points="272,58 246,188 264,188 228,335 298,170 272,170 306,58" fill="white" opacity="0.92"/>
-            <polygon points="272,74 250,180 265,180 234,308 292,176 268,176 300,74" fill="#F5C518" opacity="0.5"/>
-            <path d="M 90 355 Q 256 396 422 355" stroke="#F5C518" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity="0.55"/>
-            <text x="256" y="435" textAnchor="middle"
-              fontFamily="'Arial Black','Helvetica Neue',sans-serif"
-              fontSize="70" fontWeight="900" fontStyle="italic" fill="white">กบห-ธ.</text>
-            <text x="256" y="478" textAnchor="middle"
-              fontFamily="Arial,sans-serif" fontSize="22" fontWeight="600"
-              fill="#F5C518" opacity="0.75">กฟผ. สนง.ไทรน้อย</text>
-          </svg>
-        </div>
-
-        {/* Tagline */}
-        <div className="text-center mb-7 w-full">
-          <div className="flex items-center gap-2 justify-center mb-1">
-            <span style={{ flex: 1, height: 1, background: "linear-gradient(to right, transparent, rgba(245,197,24,0.4))" }}/>
-            <span className="text-xs tracking-[0.2em] uppercase"
-              style={{ color: "rgba(245,197,24,0.7)", fontWeight: 600 }}>ระบบบันทึกการฝึกงาน</span>
-            <span style={{ flex: 1, height: 1, background: "linear-gradient(to left, transparent, rgba(245,197,24,0.4))" }}/>
-          </div>
-          <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-            การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย สำนักงานไทรน้อย
+        {/* Brand text */}
+        <div className="text-center">
+          <p className="text-xs tracking-[0.18em] font-semibold mb-1"
+            style={{ color: "#FFC000" }}>
+            ระบบบันทึกการฝึกงาน
+          </p>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+            กองบริหาร การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย สำนักงานไทรน้อย
           </p>
         </div>
 
         {/* Login card */}
-        <div className="w-full rounded-2xl overflow-hidden"
+        <div
+          className="w-full rounded-2xl overflow-hidden"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.1)",
-          }}>
+            background: "rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.14)",
+          }}
+        >
           <div className="px-6 py-5">
             <button
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 hover:opacity-90 active:scale-95"
-              style={{ background: "white", color: "#1a1a1a" }}>
+              className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-95"
+              style={{ background: "white", color: "#1a1a1a" }}
+            >
               <GoogleIcon />
               เข้าสู่ระบบด้วย Google
             </button>
           </div>
 
-          {/* Admin info — subtle */}
-          <div className="px-6 pb-4 text-center">
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-              ผู้ดูแล: นายตวงเพชร ชัยยานนท์ &nbsp;·&nbsp; หบอว-ธ. กบห-ธ. ชธธ.
-            </p>
-          </div>
+          {/* Admin — one line, very subtle */}
+          <p
+            className="text-center text-xs pb-4 px-4"
+            style={{ color: "rgba(255,255,255,0.28)" }}
+          >
+            ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
+          </p>
         </div>
       </div>
     </div>
