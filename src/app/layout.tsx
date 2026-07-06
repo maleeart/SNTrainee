@@ -5,14 +5,18 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
 export const metadata: Metadata = {
-  title: "SNTrainee — บันทึกการฝึกงาน กฟผ. สำนักงานไทรน้อย",
+  title: "กบห-ธ. | ระบบบันทึกการฝึกงาน กฟผ. สำนักงานไทรน้อย",
   description: "ระบบบันทึกรายงานประจำวันสำหรับนักศึกษาฝึกงาน กองบริหาร การไฟฟ้าฝ่ายผลิตแห่งประเทศไทย สำนักงานไทรน้อย",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th" className={geist.variable}>
-      <body className="min-h-screen bg-gray-50 font-sans antialiased">{children}</body>
+      <body className="min-h-screen font-sans antialiased">{children}</body>
     </html>
   );
 }
