@@ -1,57 +1,78 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-
-// concept.png = 1254×1254px
-// Dark blue app icon (bottom center): x:410-790, y:690-1080 → 380×390px
-// Display at 210px wide → scale = 210/380 = 0.553
-// background-size: 1254×0.553 = 693px
-// offset-x: -(410×0.553) = -227px   offset-y: -(690×0.553) = -382px
-// container height: 390×0.553 = 216px ≈ 210px
-const ICON_STYLE: React.CSSProperties = {
-  width: 210,
-  height: 210,
-  borderRadius: 36,
-  overflow: "hidden",
-  backgroundImage: "url('/concept.png')",
-  backgroundSize: "693px",
-  backgroundPosition: "-227px -382px",
-  backgroundRepeat: "no-repeat",
-  boxShadow: "0 8px 32px rgba(0,62,142,0.25)",
-};
+import Image from "next/image";
 
 export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6"
-      style={{ background: "#f0f4fb" }}
+      style={{ background: "linear-gradient(175deg, #002d7a 0%, #003E8E 50%, #002060 100%)" }}
     >
-      <div className="w-full max-w-xs flex flex-col items-center gap-5">
+      {/* Subtle background glow */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(255,192,0,0.06) 0%, transparent 70%)",
+      }} />
 
-        {/* App icon — cropped from concept.png dark blue version */}
-        <div style={ICON_STYLE} />
+      <div className="relative w-full max-w-xs flex flex-col items-center gap-6">
+
+        {/* Icon */}
+        <div style={{
+          borderRadius: 36,
+          overflow: "hidden",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,192,0,0.15)",
+          width: 200,
+          height: 200,
+          flexShrink: 0,
+        }}>
+          <Image
+            src="/logi.png"
+            alt="กบห-ธ. กฟผ."
+            width={200}
+            height={200}
+            style={{ objectFit: "cover", display: "block" }}
+            priority
+          />
+        </div>
+
+        {/* Brand */}
+        <div className="text-center -mt-2">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span style={{ flex: 1, height: 1, background: "linear-gradient(to right, transparent, rgba(255,192,0,0.5))" }} />
+            <span className="text-xs font-semibold tracking-widest" style={{ color: "#FFC000" }}>
+              ระบบบันทึกการฝึกงาน
+            </span>
+            <span style={{ flex: 1, height: 1, background: "linear-gradient(to left, transparent, rgba(255,192,0,0.5))" }} />
+          </div>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+            กองบริหาร กฟผ. สำนักงานไทรน้อย
+          </p>
+        </div>
 
         {/* Login card */}
-        <div className="w-full rounded-2xl overflow-hidden shadow-xl"
-          style={{ background: "#003E8E" }}>
-          <div className="px-6 pt-6 pb-2">
-            <p className="text-center text-sm font-semibold mb-4"
-              style={{ color: "rgba(255,255,255,0.9)" }}>
-              เข้าสู่ระบบ
-            </p>
+        <div className="w-full rounded-2xl overflow-hidden" style={{
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          backdropFilter: "blur(12px)",
+        }}>
+          <div className="px-6 pt-5 pb-4">
             <button
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
               className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-95"
-              style={{ background: "white", color: "#1a1a1a" }}
+              style={{ background: "white", color: "#111" }}
             >
               <GoogleIcon />
               เข้าสู่ระบบด้วย Google
             </button>
           </div>
-          <p className="text-center text-xs py-4 px-4"
-            style={{ color: "rgba(255,255,255,0.28)" }}>
-            ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
-          </p>
+
+          {/* Admin — one line, very faint */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+            <p className="text-center text-xs py-3 px-4" style={{ color: "rgba(255,255,255,0.25)" }}>
+              ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
+            </p>
+          </div>
         </div>
       </div>
     </div>
