@@ -3,18 +3,21 @@
 import { signIn } from "next-auth/react";
 
 // concept.png = 1254×1254px
-// White-bg logo area: x:20-680, y:10-660 (660×650px)
-// Display at 280px wide → scale = 280/660 = 0.424
-// background-size: 1254×0.424 = 532px
-// offset-x: -(20×0.424) = -8px   offset-y: -(10×0.424) = -4px
-// container height: 650×0.424 = 276px
-const LOGO_STYLE: React.CSSProperties = {
-  width: 280,
-  height: 276,
+// Dark blue app icon (bottom center): x:410-790, y:690-1080 → 380×390px
+// Display at 210px wide → scale = 210/380 = 0.553
+// background-size: 1254×0.553 = 693px
+// offset-x: -(410×0.553) = -227px   offset-y: -(690×0.553) = -382px
+// container height: 390×0.553 = 216px ≈ 210px
+const ICON_STYLE: React.CSSProperties = {
+  width: 210,
+  height: 210,
+  borderRadius: 36,
+  overflow: "hidden",
   backgroundImage: "url('/concept.png')",
-  backgroundSize: "532px",
-  backgroundPosition: "-8px -4px",
+  backgroundSize: "693px",
+  backgroundPosition: "-227px -382px",
   backgroundRepeat: "no-repeat",
+  boxShadow: "0 8px 32px rgba(0,62,142,0.25)",
 };
 
 export default function LoginPage() {
@@ -23,16 +26,14 @@ export default function LoginPage() {
       className="min-h-screen flex flex-col items-center justify-center px-6"
       style={{ background: "#f0f4fb" }}
     >
-      <div className="w-full max-w-sm flex flex-col items-center gap-4">
+      <div className="w-full max-w-xs flex flex-col items-center gap-5">
 
-        {/* Logo — cropped from concept.png white-bg version */}
-        <div style={LOGO_STYLE} />
+        {/* App icon — cropped from concept.png dark blue version */}
+        <div style={ICON_STYLE} />
 
         {/* Login card */}
-        <div
-          className="w-full rounded-2xl overflow-hidden shadow-xl"
-          style={{ background: "#003E8E" }}
-        >
+        <div className="w-full rounded-2xl overflow-hidden shadow-xl"
+          style={{ background: "#003E8E" }}>
           <div className="px-6 pt-6 pb-2">
             <p className="text-center text-sm font-semibold mb-4"
               style={{ color: "rgba(255,255,255,0.9)" }}>
@@ -47,12 +48,8 @@ export default function LoginPage() {
               เข้าสู่ระบบด้วย Google
             </button>
           </div>
-
-          {/* Admin — one line, very subtle */}
-          <p
-            className="text-center text-xs py-4 px-4"
-            style={{ color: "rgba(255,255,255,0.3)" }}
-          >
+          <p className="text-center text-xs py-4 px-4"
+            style={{ color: "rgba(255,255,255,0.28)" }}>
             ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
           </p>
         </div>
