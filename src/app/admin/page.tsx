@@ -19,7 +19,9 @@ export default async function AdminPage() {
   return (
     <AdminView
       readOnly={u.role === "EXECUTIVE"}
+      meId={u.id}
       meName={u.name ?? ""}
+      meImage={u.image}
       users={JSON.parse(JSON.stringify(users))}
       reports={JSON.parse(JSON.stringify(reports))}
     />

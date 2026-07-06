@@ -12,19 +12,21 @@ type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
   jobType: string | null; systemCategory: string | null; status: string;
   assignedMentorId: string | null; scores: Record<string, number> | null;
+  mentorComment: string | null;
   user: { name: string | null; level: string | null; school: string | null };
   assignedMentor: { name: string | null } | null;
 };
 
 type Tab = "overview" | "reports" | "users";
 
-export default function AdminView({ readOnly, meName, meImage, users: initUsers, reports: initReports }: {
-  readOnly: boolean; meName: string; meImage?: string | null; users: U[]; reports: Rep[];
+export default function AdminView({ readOnly, meId, meName, meImage, users: initUsers, reports: initReports }: {
+  readOnly: boolean; meId: string; meName: string; meImage?: string | null; users: U[]; reports: Rep[];
 }) {
   const [users, setUsers] = useState<U[]>(initUsers);
   const [reports, setReports] = useState<Rep[]>(initReports);
   const [tab, setTab] = useState<Tab>("overview");
   const [sideOpen, setSideOpen] = useState(false);
+  const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
 
   // admin + mentor can both be assigned as mentor
   const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
@@ -35,6 +37,11 @@ export default function AdminView({ readOnly, meName, meImage, users: initUsers,
     const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "role", userId, role }) });
     if (res.ok) setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role } : u)));
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
+  };
+
+  const onEvalDone = (updated: Rep) => {
+    setReports(prev => prev.map(r => (r.id === updated.id ? { ...r, ...updated } : r)));
+    setEvalTarget(null);
   };
 
   const assign = async (reportId: string, mentorId: string) => {
@@ -135,10 +142,11 @@ export default function AdminView({ readOnly, meName, meImage, users: initUsers,
         {/* Main content */}
         <main className="flex-1 overflow-auto p-6">
           {tab === "overview" && <OverviewTab reports={reports} students={students} mentors={mentors} />}
-          {tab === "reports" && <ReportsTab reports={reports} mentors={mentors} readOnly={readOnly} onAssign={assign} />}
+          {tab === "reports" && <ReportsTab reports={reports} mentors={mentors} readOnly={readOnly} meId={meId} onAssign={assign} onEval={setEvalTarget} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} />}
         </main>
       </div>
+      {evalTarget && <EvalModal report={evalTarget} onClose={() => setEvalTarget(null)} onDone={onEvalDone} />}
     </div>
   );
 }
@@ -194,7 +202,7 @@ function OverviewTab({ reports, students, mentors }: { reports: Rep[]; students:
   );
 }
 
-function ReportsTab({ reports, mentors, readOnly, onAssign }: { reports: Rep[]; mentors: U[]; readOnly: boolean; onAssign: (id: string, mentorId: string) => void }) {
+function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { reports: Rep[]; mentors: U[]; readOnly: boolean; meId: string; onAssign: (id: string, mentorId: string) => void; onEval: (r: Rep) => void }) {
   const [filter, setFilter] = useState("ALL");
   const filtered = filter === "ALL" ? reports : reports.filter(r => r.status === filter);
 
@@ -216,7 +224,7 @@ function ReportsTab({ reports, mentors, readOnly, onAssign }: { reports: Rep[]; 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>หมวด</Th><Th>สถานะ</Th><Th>พี่เลี้ยง</Th><Th>คะแนน</Th></tr>
+            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>หมวด</Th><Th>สถานะ</Th><Th>พี่เลี้ยง</Th><Th>คะแนน</Th><Th> </Th></tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(r => (
@@ -237,6 +245,11 @@ function ReportsTab({ reports, mentors, readOnly, onAssign }: { reports: Rep[]; 
                 </Td>
                 <Td className="text-center">
                   {r.scores ? <span className="font-semibold" style={{ color: "#003E8E" }}>{(Object.values(r.scores).reduce((a, b) => a + b, 0) / Object.values(r.scores).length).toFixed(1)}</span> : <span className="text-gray-300">—</span>}
+                </Td>
+                <Td>
+                  {!readOnly && r.assignedMentorId === meId && r.status === "PENDING_APPROVAL" && (
+                    <button onClick={() => onEval(r)} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white" style={{ background: "#003E8E" }}>ตรวจงาน</button>
+                  )}
                 </Td>
               </tr>
             ))}
@@ -293,6 +306,51 @@ function StatCard({ label, value, accent }: { label: string; value: number | str
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
       <div className="text-2xl font-bold" style={{ color: accent ? "#FFC000" : "#003E8E" }}>{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function EvalModal({ report, onClose, onDone }: { report: Rep; onClose: () => void; onDone: (r: Rep) => void }) {
+  const [scores, setScores] = useState<Record<string, number>>(
+    () => report.scores ?? Object.fromEntries(SCORE_CRITERIA.map(c => [c.key, 3]))
+  );
+  const [comment, setComment] = useState(report.mentorComment ?? "");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (action: "approve" | "reject") => {
+    if (action === "reject" && !comment.trim()) return alert("กรุณาระบุเหตุผลที่ตีกลับ");
+    setBusy(true);
+    const res = await fetch(`/api/reports/${report.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, scores, comment }),
+    });
+    setBusy(false);
+    if (!res.ok) return alert((await res.json()).error ?? "ไม่สำเร็จ");
+    onDone({ ...report, ...(await res.json()) });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-1">ตรวจงาน: {report.user.name}</h2>
+        <p className="text-sm text-gray-500 mb-4">{report.title}</p>
+        <p className="text-sm font-medium text-gray-700 mb-2">ให้คะแนน (1–5)</p>
+        <div className="space-y-3 mb-4">
+          {SCORE_CRITERIA.map(c => (
+            <div key={c.key}>
+              <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">{c.label}</span><span className="font-medium" style={{ color: "#003E8E" }}>{scores[c.key]}</span></div>
+              <input type="range" min={1} max={5} value={scores[c.key]} onChange={e => setScores({ ...scores, [c.key]: +e.target.value })} className="w-full" style={{ accentColor: "#003E8E" }} />
+            </div>
+          ))}
+        </div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">ความเห็น</label>
+        <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none resize-none mb-4" placeholder="ข้อเสนอแนะ / เหตุผลที่ตีกลับ" />
+        <div className="flex gap-3">
+          <button disabled={busy} onClick={() => submit("approve")} className="flex-1 text-white py-2.5 rounded-xl font-medium" style={{ background: "#16a34a" }}>อนุมัติ</button>
+          <button disabled={busy} onClick={() => submit("reject")} className="flex-1 text-white py-2.5 rounded-xl font-medium" style={{ background: "#ef4444" }}>ตีกลับ</button>
+          <button disabled={busy} onClick={onClose} className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
+        </div>
+      </div>
     </div>
   );
 }
