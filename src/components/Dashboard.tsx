@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "next-auth/react";
 import type { Report } from "@prisma/client";
 import {
   JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR,
   SCORE_CRITERIA, PPE_OPTIONS,
 } from "@/lib/labels";
+import AppNav from "./AppNav";
 
-type User = { id?: string; name?: string | null; image?: string | null };
+type User = { id?: string; name?: string | null; image?: string | null; role?: string };
 type Scores = Record<string, number>;
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
@@ -64,21 +64,8 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     : "-";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-blue-950 text-white shadow-lg">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div>
-            <span className="font-bold text-yellow-400 text-lg">SNTrainee</span>
-            <span className="text-blue-300 text-xs ml-2 hidden sm:inline">กฟผ. สนง.ไทรน้อย</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <a href="/profile" className="text-xs text-blue-300 hover:text-white">โปรไฟล์</a>
-            {user.image && <img src={user.image} className="w-7 h-7 rounded-full" alt="" />}
-            <span className="text-sm text-blue-200 hidden sm:inline">{user.name}</span>
-            <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-blue-300 hover:text-white px-2 py-1 rounded hover:bg-blue-800">ออกจากระบบ</button>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
+      <AppNav name={user.name} image={user.image} role={user.role ?? "STUDENT"} profileHref="/profile" />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -87,7 +74,8 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
             <p className="text-gray-500 text-sm mt-0.5">งานช่างไฟฟ้า อาคารและบริเวณ</p>
           </div>
           <button onClick={() => { setEditing(blank()); setTaskInput(""); setToolInput(""); }}
-            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-xl font-medium text-sm shadow">
+            className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
+            style={{ background: "#003E8E" }}>
             <span className="text-lg leading-none">+</span> บันทึกวันใหม่
           </button>
         </div>
@@ -241,7 +229,7 @@ function ChipInput({ value, setValue, items, onAdd, onRemove, placeholder }: {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-      <div className="text-2xl font-bold text-blue-700">{value}</div>
+      <div className="text-2xl font-bold" style={{ color: "#003E8E" }}>{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "next-auth/react";
+import AppNav from "./AppNav";
 import {
   JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL,
   SCORE_CRITERIA, PPE_OPTIONS,
@@ -33,20 +33,8 @@ export default function MentorView({ meId, meName, meImage, reports: initial }: 
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-blue-950 text-white shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div>
-            <span className="font-bold text-yellow-400 text-lg">SNTrainee</span>
-            <span className="text-blue-300 text-xs ml-2">พี่เลี้ยง</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {meImage && <img src={meImage} className="w-7 h-7 rounded-full" alt="" />}
-            <span className="text-sm text-blue-200 hidden sm:inline">{meName}</span>
-            <button onClick={() => signOut({ callbackUrl: "/" })} className="text-xs text-blue-300 hover:text-white px-2 py-1 rounded hover:bg-blue-800">ออกจากระบบ</button>
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
+      <AppNav name={meName} image={meImage} role="MENTOR" />
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษา</h1>
