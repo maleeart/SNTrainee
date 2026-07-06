@@ -22,15 +22,15 @@ export default function LoginPage() {
           borderRadius: 36,
           overflow: "hidden",
           boxShadow: "0 12px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,192,0,0.15)",
-          width: 200,
-          height: 200,
+          width: 140,
+          height: 140,
           flexShrink: 0,
         }}>
           <Image
             src="/logi.png"
             alt="กบห-ธ. กฟผ."
-            width={200}
-            height={200}
+            width={140}
+            height={140}
             style={{ objectFit: "cover", display: "block" }}
             priority
           />
@@ -69,8 +69,8 @@ export default function LoginPage() {
 
           {/* Admin — one line, very faint */}
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-            <p className="text-center text-xs py-3 px-4" style={{ color: "rgba(255,255,255,0.25)" }}>
-              ผู้ดูแล: นายตวงเพชร ชัยยานนท์ วศ.4 · หบอว-ธ. กบห-ธ. ชธธ.
+            <p className="text-center text-xs py-3 px-4 whitespace-nowrap" style={{ color: "rgba(255,255,255,0.25)" }}>
+              ผู้ดูแล: ตวงเพชร ชัยยานนท์ · หบอว-ธ. กบห-ธ. ชธธ.
             </p>
           </div>
         </div>
