@@ -70,7 +70,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     setReports(prev => {
       const i = prev.findIndex(r => r.id === saved.id);
       if (i >= 0) { const n = [...prev]; n[i] = saved; return n; }
-      return [saved, ...prev].sort((a, b) => iso(b.date).localeCompare(iso(a.date)));
+      return [saved, ...prev].sort((a, b) => iso(b.date).localeCompare(iso(a.date)) || iso(b.createdAt).localeCompare(iso(a.createdAt)));
     });
     setEditing(null);
   };
@@ -123,23 +123,11 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
             <h1 className="text-2xl font-bold text-gray-800">บันทึกการฝึกงาน</h1>
             <p className="text-gray-500 text-sm mt-0.5">งานช่างไฟฟ้า อาคารและบริเวณ</p>
           </div>
-          {(() => {
-            const todayApproved = reports.find(r => iso(r.date) === today && r.status === "APPROVED");
-            return todayApproved ? (
-              <div className="text-right">
-                <button disabled className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm opacity-40 cursor-not-allowed" style={{ background: "#003E8E" }}>
-                  <span className="text-lg leading-none">+</span> บันทึกวันใหม่
-                </button>
-                <p className="text-xs text-green-600 mt-1">✓ วันนี้อนุมัติแล้ว</p>
-              </div>
-            ) : (
-              <button onClick={() => { setEditing(blank()); setToolInput(""); setPpeInput(""); }}
-                className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
-                style={{ background: "#003E8E" }}>
-                <span className="text-lg leading-none">+</span> บันทึกวันใหม่
-              </button>
-            );
-          })()}
+          <button onClick={() => { setEditing(blank()); setToolInput(""); setPpeInput(""); }}
+            className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
+            style={{ background: "#003E8E" }}>
+            <span className="text-lg leading-none">+</span> บันทึกวันใหม่
+          </button>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">

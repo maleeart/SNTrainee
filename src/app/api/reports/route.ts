@@ -8,7 +8,7 @@ export async function GET() {
 
   const reports = await prisma.report.findMany({
     where: { userId: session.user.id },
-    orderBy: { date: "desc" },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
   return NextResponse.json(reports);
 }
@@ -19,21 +19,6 @@ export async function POST(req: NextRequest) {
 
   const b = await req.json();
   const date = new Date(b.date);
-
-  const existing = await prisma.report.findUnique({
-    where: { userId_date: { userId: session.user.id, date } },
-  });
-  if (existing?.status === "APPROVED") {
-    return NextResponse.json({ error: "รายงานนี้อนุมัติแล้ว แก้ไขไม่ได้" }, { status: 400 });
-  }
-
-  // resubmit after edit → กลับไปรอสถานะที่เหมาะสม
-  const status = existing?.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
-
-  // เมื่อแก้ไข (client ส่ง id มา) ต้องระบุเหตุผล
-  if (b.id && !b.editReason?.trim()) {
-    return NextResponse.json({ error: "กรุณาระบุเหตุผลที่แก้ไข" }, { status: 400 });
-  }
 
   const data = {
     title: b.title,
@@ -51,10 +36,29 @@ export async function POST(req: NextRequest) {
     editReason: b.editReason || null,
   };
 
-  const report = await prisma.report.upsert({
-    where: { userId_date: { userId: session.user.id, date } },
-    update: { ...data, status },
-    create: { ...data, userId: session.user.id, date, status: "PENDING_ASSIGN" },
+  // แก้ไขรายงานที่มีอยู่ (ส่ง id มา)
+  if (b.id) {
+    const existing = await prisma.report.findUnique({ where: { id: b.id } });
+    if (!existing || existing.userId !== session.user.id) {
+      return NextResponse.json({ error: "ไม่พบรายงาน" }, { status: 404 });
+    }
+    if (existing.status === "APPROVED") {
+      return NextResponse.json({ error: "รายงานนี้อนุมัติแล้ว แก้ไขไม่ได้" }, { status: 400 });
+    }
+    if (!b.editReason?.trim()) {
+      return NextResponse.json({ error: "กรุณาระบุเหตุผลที่แก้ไข" }, { status: 400 });
+    }
+    const status = existing.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
+    const report = await prisma.report.update({
+      where: { id: b.id },
+      data: { ...data, date, status },
+    });
+    return NextResponse.json(report);
+  }
+
+  // สร้างรายงานใหม่
+  const report = await prisma.report.create({
+    data: { ...data, userId: session.user.id, date, status: "PENDING_ASSIGN" },
   });
   return NextResponse.json(report);
 }
