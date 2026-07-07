@@ -29,10 +29,21 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   const [tab, setTab] = useState<Tab>("overview");
   const [sideOpen, setSideOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<U | null>(null);
+  const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
 
   const students = users.filter(u => u.role === "STUDENT");
   const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
   const pending = reports.filter(r => r.status === "PENDING").length;
+
+  const onEvalDone = (reportId: string, ev: EvalRecord) => {
+    setReports(prev => prev.map(r => {
+      if (r.id !== reportId) return r;
+      const idx = r.evaluations.findIndex(e => e.mentorId === meId);
+      const evals = idx >= 0 ? r.evaluations.map((e, i) => i === idx ? ev : e) : [...r.evaluations, ev];
+      return { ...r, evaluations: evals, status: "SCORED" };
+    }));
+    setEvalTarget(null);
+  };
 
   const setRole = async (userId: string, role: string) => {
     const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "role", userId, role }) });
@@ -91,22 +102,29 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
         </aside>
 
         <main className="flex-1 overflow-auto p-6">
-          {tab === "overview" && <OverviewTab reports={reports} students={students} mentors={mentors} />}
-          {tab === "reports" && <ReportsTab reports={reports} />}
+          {tab === "overview" && <OverviewTab reports={reports} students={students} />}
+          {tab === "reports" && <ReportsTab reports={reports} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
         </main>
       </div>
       {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
+      {evalTarget && (
+        <EvalModal
+          report={evalTarget}
+          myExisting={evalTarget.evaluations.find(e => e.mentorId === meId) ?? null}
+          onClose={() => setEvalTarget(null)}
+          onDone={onEvalDone}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ reports, students, mentors }: { reports: Rep[]; students: U[]; mentors: U[] }) {
+function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
   const scored = reports.filter(r => r.status === "SCORED");
 
-  // Per-student average: avg all evaluations across all reports
   const studentStats = students.map(s => {
     const mine = reports.filter(r => r.user.id === s.id);
     const allEvals = mine.flatMap(r => r.evaluations);
@@ -119,13 +137,10 @@ function OverviewTab({ reports, students, mentors }: { reports: Rep[]; students:
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ภาพรวม</h1>
       <p className="text-sm text-gray-500 mb-6">สรุปข้อมูลการฝึกงาน</p>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="นักศึกษา" value={students.length} />
-        <StatCard label="พี่เลี้ยง" value={mentors.length} />
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <StatCard label="รายงานทั้งหมด" value={reports.length} />
         <StatCard label="รอประเมิน" value={reports.filter(r => r.status === "PENDING").length} accent />
         <StatCard label="ประเมินแล้ว" value={scored.length} />
-        <StatCard label="ครั้งที่ประเมิน" value={reports.reduce((s, r) => s + r.evaluations.length, 0)} />
       </div>
 
       {studentStats.length > 0 && (
@@ -252,7 +267,7 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
 
 // ─── Reports Tab ──────────────────────────────────────────────────────────────
 
-function ReportsTab({ reports }: { reports: Rep[] }) {
+function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; onEval: (r: Rep) => void }) {
   const [filter, setFilter] = useState("ALL");
   const filtered = filter === "ALL" ? reports : reports.filter(r => r.status === filter);
 
@@ -272,11 +287,12 @@ function ReportsTab({ reports }: { reports: Rep[] }) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th></tr>
+            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th>{!readOnly && <Th> </Th>}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(r => {
               const avg = overallAvg(r.evaluations);
+              const myEval = r.evaluations.find(e => e.mentorId === meId);
               return (
                 <tr key={r.id} className="hover:bg-gray-50">
                   <Td className="whitespace-nowrap text-gray-500">{r.date.slice(0, 10)}</Td>
@@ -287,6 +303,14 @@ function ReportsTab({ reports }: { reports: Rep[] }) {
                   <Td className="text-center">
                     {avg != null ? <span className="font-semibold" style={{ color: "#003E8E" }}>{avg.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
                   </Td>
+                  {!readOnly && (
+                    <Td>
+                      <button onClick={() => onEval(r)} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white whitespace-nowrap"
+                        style={{ background: myEval ? "#6366f1" : "#003E8E" }}>
+                        {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
+                      </button>
+                    </Td>
+                  )}
                 </tr>
               );
             })}
@@ -299,45 +323,64 @@ function ReportsTab({ reports }: { reports: Rep[] }) {
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
+const ROLE_ORDER = ["ADMIN", "MENTOR", "STUDENT", "EXECUTIVE"] as const;
+const ROLE_SECTION_LABEL: Record<string, string> = { ADMIN: "ผู้ดูแลระบบ", MENTOR: "พี่เลี้ยง", STUDENT: "นักศึกษาฝึกงาน", EXECUTIVE: "ผู้สังเกตการณ์" };
+const ROLE_SECTION_COLOR: Record<string, string> = { ADMIN: "#7C3AED", MENTOR: "#003E8E", STUDENT: "#059669", EXECUTIVE: "#B45309" };
+
 function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void }) {
+  const grouped = ROLE_ORDER.map(role => ({ role, list: users.filter(u => u.role === role) })).filter(g => g.list.length > 0);
+
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ผู้ใช้งาน</h1>
       <p className="text-sm text-gray-500 mb-6">คลิกชื่อเพื่อดูรายละเอียด</p>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th><Th>สถานะ</Th></tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {users.map(u => (
-              <tr key={u.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => onDetail(u)}>
-                <Td>
-                  <div className="flex items-center gap-2">
-                    {u.image ? <img src={u.image} className="w-6 h-6 rounded-full" alt="" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">{u.name?.[0]}</div>}
-                    <span className="font-medium text-gray-800 hover:underline">{u.name}</span>
-                  </div>
-                </Td>
-                <Td className="text-gray-500">{u.nickname ?? <span className="text-gray-300">—</span>}</Td>
-                <Td className="text-gray-500 text-xs">{u.email}</Td>
-                <Td>{u.level ? LEVEL_LABEL[u.level] : <span className="text-gray-300">—</span>}</Td>
-                <Td>{u.school ?? <span className="text-gray-300">—</span>}</Td>
-                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                  {readOnly
-                    ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{ROLE_LABEL[u.role]}</span>
-                    : (
-                      <select value={u.role} onChange={e => onSetRole(u.id, e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white">
-                        {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                    )}
-                </td>
-                <Td>
-                  {u.profileDone ? <span className="text-xs text-green-600">✓ ครบ</span> : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="space-y-6">
+        {grouped.map(({ role, list }) => (
+          <div key={role}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full text-white" style={{ background: ROLE_SECTION_COLOR[role] }}>
+                {ROLE_SECTION_LABEL[role]}
+              </span>
+              <span className="text-xs text-gray-400">{list.length} คน</span>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead style={{ background: "#F4F6FB" }}>
+                  <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th><Th>สถานะ</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {list.map(u => (
+                    <tr key={u.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => onDetail(u)}>
+                      <Td>
+                        <div className="flex items-center gap-2">
+                          {u.image ? <img src={u.image} className="w-6 h-6 rounded-full" alt="" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">{u.name?.[0]}</div>}
+                          <span className="font-medium text-gray-800 hover:underline">{u.name}</span>
+                        </div>
+                      </Td>
+                      <Td className="text-gray-500">{u.nickname ?? <span className="text-gray-300">—</span>}</Td>
+                      <Td className="text-gray-500 text-xs">{u.email}</Td>
+                      <Td>{u.level ? LEVEL_LABEL[u.level] : <span className="text-gray-300">—</span>}</Td>
+                      <Td>{u.school ?? <span className="text-gray-300">—</span>}</Td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        {readOnly
+                          ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{ROLE_LABEL[u.role]}</span>
+                          : (
+                            <select value={u.role} onChange={e => onSetRole(u.id, e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white">
+                              {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                          )}
+                      </td>
+                      <Td>
+                        {u.profileDone ? <span className="text-xs text-green-600">✓ ครบ</span> : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -382,6 +425,74 @@ function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[
 
         <div className="px-6 pb-6">
           <button onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ปิด</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Eval Modal ───────────────────────────────────────────────────────────────
+
+function EvalModal({ report, myExisting, onClose, onDone }: {
+  report: Rep; myExisting: EvalRecord | null;
+  onClose: () => void; onDone: (reportId: string, ev: EvalRecord) => void;
+}) {
+  const [scores, setScores] = useState<Record<string, number>>(
+    myExisting?.scores ?? Object.fromEntries(SCORE_CRITERIA.map(c => [c.key, 3]))
+  );
+  const [comment, setComment] = useState(myExisting?.comment ?? "");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    const res = await fetch("/api/evaluations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportId: report.id, scores, comment }),
+    });
+    setBusy(false);
+    if (!res.ok) return alert((await res.json()).error ?? "ไม่สำเร็จ");
+    onDone(report.id, await res.json());
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-0.5">ประเมินงาน</h2>
+        <p className="text-sm text-gray-500 mb-4">{report.user.name} · {report.title} · {report.date.slice(0, 10)}</p>
+
+        <p className="text-sm font-medium text-gray-700 mb-3">คะแนนแต่ละหมวด (1–5)</p>
+        <div className="space-y-4 mb-4">
+          {SCORE_CRITERIA.map(c => (
+            <div key={c.key}>
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-gray-600">{c.label}</span>
+                <span className="font-bold text-lg" style={{ color: "#003E8E" }}>{scores[c.key]}</span>
+              </div>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(v => (
+                  <button key={v} onClick={() => setScores({ ...scores, [c.key]: v })}
+                    className="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all"
+                    style={scores[c.key] === v ? { background: "#003E8E", color: "#fff" } : { background: "#F4F6FB", color: "#6b7280" }}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <label className="block text-sm font-medium text-gray-700 mb-1">ความเห็น / ข้อเสนอแนะ</label>
+        <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 resize-none mb-5"
+          placeholder="ข้อเสนอแนะสำหรับนักศึกษา..." />
+
+        <div className="flex gap-3">
+          <button disabled={busy} onClick={submit}
+            className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-50"
+            style={{ background: "#003E8E" }}>
+            {busy ? "กำลังบันทึก..." : myExisting ? "อัปเดตคะแนน" : "บันทึกคะแนน"}
+          </button>
+          <button disabled={busy} onClick={onClose} className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
         </div>
       </div>
     </div>
