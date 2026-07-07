@@ -8,12 +8,14 @@ type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
-  status: string; result: string | null;
-  user: { id: string; name: string | null; level: string | null; school: string | null };
+  learned: string | null; solution: string | null; result: string | null;
+  ppe: string[]; tools: string[];
+  status: string;
+  user: { id: string; name: string | null; nickname: string | null; level: string | null; school: string | null };
   evaluations: EvalRecord[];
 };
 
-type Tab = "overview" | "reports" | "users";
+type Tab = "overview" | "logs" | "export" | "users";
 
 function overallAvg(evals: EvalRecord[]): number | null {
   if (!evals.length) return null;
@@ -51,21 +53,10 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
   };
 
-  const exportCsv = () => {
-    const head = ["วันที่", "นักศึกษาฝึกงาน", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "สถานะ", "จำนวนผู้ประเมิน", "คะแนนเฉลี่ย"];
-    const rows = reports.map(r => {
-      const avg = overallAvg(r.evaluations);
-      return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.location ?? "", r.title, STATUS_LABEL[r.status] ?? r.status, r.evaluations.length, avg != null ? avg.toFixed(2) : ""];
-    });
-    const csv = [head, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `SNTrainee_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-  };
-
   const NAV: { id: Tab; label: string; badge?: number }[] = [
     { id: "overview", label: "ภาพรวม" },
-    { id: "reports", label: "รายงาน", badge: pending },
+    { id: "logs", label: "บันทึกการฝึกงาน", badge: pending },
+    { id: "export", label: "รายงาน" },
     { id: "users", label: "ผู้ใช้งาน" },
   ];
 
@@ -93,17 +84,13 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
                 {n.badge ? <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === n.id ? "#002d7a" : "#FFC000", color: tab === n.id ? "#FFC000" : "#002d7a" }}>{n.badge}</span> : null}
               </button>
             ))}
-            <div className="mt-auto pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              <button onClick={exportCsv} className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>
-                ⬇ โหลดรายงาน (CSV)
-              </button>
-            </div>
           </div>
         </aside>
 
         <main className="flex-1 overflow-auto p-6">
           {tab === "overview" && <OverviewTab reports={reports} students={students} />}
-          {tab === "reports" && <ReportsTab reports={reports} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
+          {tab === "logs" && <LogsTab reports={reports} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
+          {tab === "export" && <ExportTab reports={reports} students={students} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
         </main>
       </div>
@@ -265,9 +252,9 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
   );
 }
 
-// ─── Reports Tab ──────────────────────────────────────────────────────────────
+// ─── Logs Tab (บันทึกการฝึกงาน) ──────────────────────────────────────────────
 
-function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; onEval: (r: Rep) => void }) {
+function LogsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; onEval: (r: Rep) => void }) {
   const [filter, setFilter] = useState("ALL");
   const filtered = filter === "ALL" ? reports : reports.filter(r => r.status === filter);
 
@@ -275,8 +262,8 @@ function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId:
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>รายงาน</h1>
-          <p className="text-sm text-gray-500">รายการรายงานนักศึกษาฝึกงานทั้งหมด</p>
+          <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>บันทึกการฝึกงาน</h1>
+          <p className="text-sm text-gray-500">บันทึกการฝึกงานทั้งหมด</p>
         </div>
         <select value={filter} onChange={e => setFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
           <option value="ALL">ทั้งหมด</option>
@@ -316,6 +303,161 @@ function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId:
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Export Tab ───────────────────────────────────────────────────────────────
+
+function avgPerCriteria(evals: EvalRecord[]): Record<string, number> {
+  if (!evals.length) return {};
+  return Object.fromEntries(SCORE_CRITERIA.map(c => [
+    c.key,
+    evals.reduce((s, e) => s + (e.scores[c.key] ?? 0), 0) / evals.length,
+  ]));
+}
+
+function makeCsv(rows: (string | number)[][], filename: string) {
+  const csv = rows.map(row => row.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = filename; a.click();
+}
+
+function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
+  const [selectedStudentId, setSelectedStudentId] = useState("ALL");
+
+  // Analytics: per student × per criterion
+  const studentStats = students.map(s => {
+    const mine = reports.filter(r => r.user.id === s.id);
+    const allEvals = mine.flatMap(r => r.evaluations);
+    const criteria = avgPerCriteria(allEvals);
+    const overall = overallAvg(allEvals);
+    return { student: s, mine, allEvals, criteria, overall };
+  });
+
+  // Export: detail rows for one student or all
+  const exportDetail = (studentId: string) => {
+    const head = [
+      "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
+      "วันที่", "หัวข้อ", "สถานที่", "รายละเอียด", "ปัญหาที่พบ", "วิธีแก้", "ผลลัพธ์",
+      "อุปกรณ์ป้องกัน", "เครื่องมือ", "สถานะ",
+      "จำนวนผู้ประเมิน",
+      ...SCORE_CRITERIA.map(c => `เฉลี่ย: ${c.label}`),
+      "คะแนนเฉลี่ยรวม",
+    ];
+    const filtered = studentId === "ALL" ? reports : reports.filter(r => r.user.id === studentId);
+    const rows = filtered.map(r => {
+      const crit = avgPerCriteria(r.evaluations);
+      const overall = overallAvg(r.evaluations);
+      return [
+        r.user.name ?? "", r.user.nickname ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "",
+        r.date.slice(0, 10), r.title, r.location ?? "", r.description, r.learned ?? "", r.solution ?? "", r.result ?? "",
+        r.ppe.join(", "), r.tools.join(", "), STATUS_LABEL[r.status] ?? r.status,
+        r.evaluations.length,
+        ...SCORE_CRITERIA.map(c => crit[c.key] != null ? crit[c.key].toFixed(2) : ""),
+        overall != null ? overall.toFixed(2) : "",
+      ];
+    });
+    const name = studentId === "ALL" ? "ทั้งหมด" : (students.find(s => s.id === studentId)?.name ?? studentId);
+    makeCsv([head, ...rows], `SNTrainee_${name}_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  // Export: summary one row per student
+  const exportSummary = () => {
+    const head = ["ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา", "จำนวนรายงาน", "จำนวนการประเมิน",
+      ...SCORE_CRITERIA.map(c => c.label), "คะแนนเฉลี่ยรวม"];
+    const rows = studentStats.map(({ student: s, mine, allEvals, criteria, overall }) => [
+      s.name ?? "", s.nickname ?? "", s.level ? LEVEL_LABEL[s.level] : "", s.school ?? "",
+      mine.length, allEvals.length,
+      ...SCORE_CRITERIA.map(c => criteria[c.key] != null ? criteria[c.key].toFixed(2) : ""),
+      overall != null ? overall.toFixed(2) : "",
+    ]);
+    makeCsv([head, ...rows], `SNTrainee_สรุป_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  return (
+    <div>
+      <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>รายงาน</h1>
+      <p className="text-sm text-gray-500 mb-6">วิเคราะห์และดาวน์โหลดข้อมูลการฝึกงาน</p>
+
+      {/* Analytics table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 overflow-x-auto">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ผลการประเมินรายหมวด</h2>
+            <p className="text-xs text-gray-400">เฉลี่ยจากทุกรายงานและทุกพี่เลี้ยง · สเกล 1–5</p>
+          </div>
+          <button onClick={exportSummary}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium text-white"
+            style={{ background: "#003E8E" }}>
+            ⬇ สรุปรายบุคคล (.csv)
+          </button>
+        </div>
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr style={{ background: "#F4F6FB" }}>
+              <Th>ชื่อ</Th>
+              <Th>รายงาน</Th>
+              {SCORE_CRITERIA.map(c => <Th key={c.key}>{c.label}</Th>)}
+              <Th>เฉลี่ยรวม</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {studentStats.map(({ student: s, mine, criteria, overall }) => (
+              <tr key={s.id} className="hover:bg-gray-50">
+                <Td>
+                  <div className="font-medium text-gray-800">{s.name}</div>
+                  {s.nickname && <div className="text-xs text-gray-400">({s.nickname})</div>}
+                </Td>
+                <Td className="text-center text-gray-500">{mine.length}</Td>
+                {SCORE_CRITERIA.map(c => {
+                  const v = criteria[c.key];
+                  const pct = v != null ? v / 5 : 0;
+                  const bg = v == null ? "#f3f4f6" : v >= 4 ? "#dcfce7" : v >= 3 ? "#fef9c3" : "#fee2e2";
+                  const fg = v == null ? "#9ca3af" : v >= 4 ? "#16a34a" : v >= 3 ? "#ca8a04" : "#dc2626";
+                  return (
+                    <Td key={c.key} className="text-center">
+                      {v != null ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: bg, color: fg }}>{v.toFixed(1)}</span>
+                          <div className="w-12 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: fg }} />
+                          </div>
+                        </div>
+                      ) : <span className="text-gray-300 text-xs">—</span>}
+                    </Td>
+                  );
+                })}
+                <Td className="text-center">
+                  <span className="font-bold text-base" style={{ color: "#003E8E" }}>
+                    {overall != null ? overall.toFixed(2) : "—"}
+                  </span>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Export detail section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>ดาวน์โหลดข้อมูลรายละเอียด</h2>
+        <p className="text-xs text-gray-400 mb-4">ส่งออกเป็น Excel (.csv) พร้อมข้อมูลทุกบันทึก คะแนนแต่ละหมวด และข้อเสนอแนะ</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <select value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white flex-1 min-w-[180px]">
+            <option value="ALL">ทุกคน (รวมทั้งหมด)</option>
+            {students.map(s => <option key={s.id} value={s.id}>{s.name}{s.nickname ? ` (${s.nickname})` : ""}</option>)}
+          </select>
+          <button onClick={() => exportDetail(selectedStudentId)}
+            className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium text-white whitespace-nowrap"
+            style={{ background: "#059669" }}>
+            ⬇ ดาวน์โหลด Excel (.csv)
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">เปิดด้วย Microsoft Excel หรือ Google Sheets — ใช้ UTF-8 encoding</p>
       </div>
     </div>
   );
