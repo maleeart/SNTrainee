@@ -3,14 +3,13 @@
 import { useState } from "react";
 import AppNav from "./AppNav";
 import {
-  JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL,
-  SCORE_CRITERIA, PPE_OPTIONS,
+  STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA,
 } from "@/lib/labels";
 
 type Rep = {
   id: string; date: string; title: string; description: string;
   jobType: string | null; systemCategory: string | null; location: string | null;
-  tools: string[]; ppe: string[]; learned: string | null; solution: string | null;
+  tools: string[]; ppe: string[]; learned: string | null; solution: string | null; result: string | null;
   status: string; assignedMentorId: string | null; mentorComment: string | null;
   scores: Record<string, number> | null;
   user: { name: string | null; image: string | null; level: string | null; school: string | null };
@@ -67,8 +66,6 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{fmt(r.date)}</span>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                        {r.systemCategory && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{SYSTEM_LABEL[r.systemCategory]}</span>}
-                        {r.jobType && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{JOB_TYPE_LABEL[r.jobType]}</span>}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-700">
                         {r.user.image && <img src={r.user.image} className="w-5 h-5 rounded-full" alt="" />}
@@ -79,9 +76,10 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       {r.location && <p className="text-xs text-gray-400">📍 {r.location}</p>}
                       <p className="text-gray-500 text-sm mt-1">{r.description}</p>
                       {r.tools.length > 0 && <p className="text-xs text-gray-400 mt-1">🔧 {r.tools.join(", ")}</p>}
-                      {r.ppe.length > 0 && <p className="text-xs text-green-600 mt-1">🦺 {r.ppe.length} รายการความปลอดภัย</p>}
+                      {r.ppe.length > 0 && <p className="text-xs text-green-600 mt-1">🦺 อุปกรณ์ป้องกัน: {r.ppe.join(", ")}</p>}
                       {r.learned && <p className="text-xs text-gray-500 mt-1"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
                       {r.solution && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
+                      {r.result && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">ผลลัพธ์:</span> {r.result}</p>}
                       {r.mentorComment && (
                         <div className="mt-2 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">
                           <span className="font-medium">ความเห็น:</span> {r.mentorComment}

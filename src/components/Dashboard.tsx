@@ -3,14 +3,13 @@
 import { useState, useRef } from "react";
 import type { Report } from "@prisma/client";
 import {
-  JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR,
-  SCORE_CRITERIA, PPE_OPTIONS,
+  STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
 } from "@/lib/labels";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
 type Scores = Record<string, number>;
-type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
@@ -40,6 +39,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
   const [reports, setReports] = useState<ReportEx[]>(initialReports);
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
+  const [ppeInput, setPpeInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [reasonPopup, setReasonPopup] = useState(false);
   const [editReason, setEditReason] = useState("");
@@ -49,7 +49,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
 
   const blank = (): ReportEx => ({
     id: "", date: new Date(today), title: "", description: "", tasks: [],
-    jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null, solution: null,
+    jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null, solution: null, result: null,
     images: [], editReason: null,
     userId: user.id ?? "", assignedMentorId: null, status: "PENDING_ASSIGN",
     mentorComment: null, scores: null, evaluatedAt: null,
@@ -151,8 +151,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{formatDate(r.date)}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
-                      {r.systemCategory && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{SYSTEM_LABEL[r.systemCategory]}</span>}
-                      {r.jobType && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{JOB_TYPE_LABEL[r.jobType]}</span>}
+
                     </div>
                     <h3 className="font-semibold text-gray-800 truncate">{r.title}</h3>
                     {r.location && <p className="text-xs text-gray-400 mt-0.5">📍 {r.location}</p>}
@@ -161,6 +160,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                       <div className="mt-2 space-y-1">
                         {r.learned && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
                         {r.solution && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
+                        {r.result && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ผลลัพธ์:</span> {r.result}</p>}
                       </div>
                     )}
                     {r.mentorComment && (
@@ -209,20 +209,6 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                 <F label="วันที่">
                   <input type="date" value={iso(editing.date)} onChange={e => set({ date: new Date(e.target.value) })} className="input" />
                 </F>
-                <div className="grid grid-cols-2 gap-3">
-                  <F label="ประเภทงาน">
-                    <select className="input" value={editing.jobType ?? ""} onChange={e => set({ jobType: (e.target.value || null) as Report["jobType"] })}>
-                      <option value="">— เลือก —</option>
-                      {Object.entries(JOB_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                  </F>
-                  <F label="หมวดระบบ">
-                    <select className="input" value={editing.systemCategory ?? ""} onChange={e => set({ systemCategory: (e.target.value || null) as Report["systemCategory"] })}>
-                      <option value="">— เลือก —</option>
-                      {Object.entries(SYSTEM_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                  </F>
-                </div>
                 <F label="สถานที่ (อาคาร/ชั้น/บริเวณ)">
                   <input className="input" value={editing.location ?? ""} onChange={e => set({ location: e.target.value })} placeholder="เช่น อาคาร ก. ชั้น 2" />
                 </F>
@@ -235,22 +221,17 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                 <F label="เครื่องมือ/อุปกรณ์ที่ใช้">
                   <ChipInput value={toolInput} setValue={setToolInput} items={editing.tools} onAdd={t => set({ tools: [...editing.tools, t] })} onRemove={i => set({ tools: editing.tools.filter((_, x) => x !== i) })} placeholder="เพิ่มเครื่องมือ..." />
                 </F>
-                <F label="ความปลอดภัยที่ปฏิบัติ (PPE)">
-                  <div className="space-y-1">
-                    {PPE_OPTIONS.map(opt => (
-                      <label key={opt} className="flex items-center gap-2 text-sm text-gray-600">
-                        <input type="checkbox" checked={editing.ppe.includes(opt)}
-                          onChange={e => set({ ppe: e.target.checked ? [...editing.ppe, opt] : editing.ppe.filter(p => p !== opt) })} />
-                        {opt}
-                      </label>
-                    ))}
-                  </div>
+                <F label="อุปกรณ์ป้องกันที่ใช้">
+                  <ChipInput value={ppeInput} setValue={setPpeInput} items={editing.ppe} onAdd={t => set({ ppe: [...editing.ppe, t] })} onRemove={i => set({ ppe: editing.ppe.filter((_, x) => x !== i) })} placeholder="เช่น หมวกนิรภัย, ถุงมือยาง..." />
                 </F>
                 <F label="ปัญหาที่พบ">
                   <textarea rows={2} className="input resize-none" value={editing.learned ?? ""} onChange={e => set({ learned: e.target.value })} placeholder="ระบุปัญหาหรืออุปสรรคที่พบ..." />
                 </F>
                 <F label="วิธีการแก้ปัญหา">
                   <textarea rows={2} className="input resize-none" value={editing.solution ?? ""} onChange={e => set({ solution: e.target.value })} placeholder="วิธีที่ใช้แก้ไขหรือแนวทางที่ใช้..." />
+                </F>
+                <F label="ผลลัพธ์และสิ่งที่ได้รับ">
+                  <textarea rows={2} className="input resize-none" value={editing.result ?? ""} onChange={e => set({ result: e.target.value })} placeholder="ผลลัพธ์จากงานและสิ่งที่ได้เรียนรู้..." />
                 </F>
 
                 {/* Image upload */}

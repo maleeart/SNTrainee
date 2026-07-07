@@ -4,13 +4,13 @@ import { useState } from "react";
 import Image from "next/image";
 import AppNav from "./AppNav";
 import {
-  ROLE_LABEL, LEVEL_LABEL, JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
+  ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
 } from "@/lib/labels";
 
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
-  jobType: string | null; systemCategory: string | null; status: string;
+  jobType: string | null; systemCategory: string | null; status: string; result: string | null;
   assignedMentorId: string | null; scores: Record<string, number> | null;
   mentorComment: string | null;
   user: { name: string | null; level: string | null; school: string | null };
@@ -54,12 +54,12 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   };
 
   const exportCsv = () => {
-    const head = ["วันที่", "นักศึกษา", "ระดับ", "สถานศึกษา", "ประเภทงาน", "หมวดระบบ", "สถานที่", "หัวข้อ", "พี่เลี้ยง", "สถานะ", ...SCORE_CRITERIA.map(c => c.label), "เฉลี่ย"];
+    const head = ["วันที่", "นักศึกษา", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "พี่เลี้ยง", "สถานะ", ...SCORE_CRITERIA.map(c => c.label), "เฉลี่ย"];
     const rows = reports.map(r => {
       const sc = r.scores;
       const vals = SCORE_CRITERIA.map(c => (sc ? sc[c.key] ?? "" : ""));
       const avg = sc ? (Object.values(sc).reduce((a, b) => a + b, 0) / Object.values(sc).length).toFixed(2) : "";
-      return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.jobType ? JOB_TYPE_LABEL[r.jobType] : "", r.systemCategory ? SYSTEM_LABEL[r.systemCategory] : "", r.location ?? "", r.title, r.assignedMentor?.name ?? "", STATUS_LABEL[r.status], ...vals, avg];
+      return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.location ?? "", r.title, r.assignedMentor?.name ?? "", STATUS_LABEL[r.status], ...vals, avg];
     });
     const csv = [head, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -204,7 +204,7 @@ function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { re
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>หมวด</Th><Th>สถานะ</Th><Th>พี่เลี้ยง</Th><Th>คะแนน</Th><Th> </Th></tr>
+            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>พี่เลี้ยง</Th><Th>คะแนน</Th><Th> </Th></tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(r => (
@@ -212,7 +212,6 @@ function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { re
                 <Td className="whitespace-nowrap text-gray-500">{r.date.slice(0, 10)}</Td>
                 <Td><span className="font-medium text-gray-800">{r.user.name}</span>{r.user.level && <span className="text-xs text-gray-400 ml-1">{LEVEL_LABEL[r.user.level]}</span>}</Td>
                 <Td><span className="font-medium">{r.title}</span>{r.location && <div className="text-xs text-gray-400">📍 {r.location}</div>}</Td>
-                <Td>{r.systemCategory ? SYSTEM_LABEL[r.systemCategory] : "-"}</Td>
                 <Td><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span></Td>
                 <Td>
                   {readOnly ? (r.assignedMentor?.name ?? "-") : (

@@ -112,6 +112,7 @@ model Report {
   ppe            String[]        @default([]) // รายการความปลอดภัยที่ทำ
   learned        String?         @db.Text // ปัญหาที่พบ
   solution       String?         @db.Text // วิธีการแก้ปัญหา
+  result         String?         @db.Text // ผลลัพธ์และสิ่งที่ได้รับ
   images         String[]        @default([]) // URLs รูปภาพประกอบ
   editReason     String?         @db.Text // เหตุผลที่แก้ไข
 
