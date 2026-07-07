@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import * as XLSX from "xlsx";
 import AppNav from "./AppNav";
 import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
 
@@ -318,12 +319,7 @@ function avgPerCriteria(evals: EvalRecord[]): Record<string, number> {
   ]));
 }
 
-function makeCsv(rows: (string | number)[][], filename: string) {
-  const csv = rows.map(row => row.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = filename; a.click();
-}
+function truncate(s: string, n: number) { return s.length > n ? s.slice(0, n) + "…" : s; }
 
 // Short labels for radar chart vertices
 const CRITERIA_SHORT = ["ทักษะ", "ปลอดภัย", "รับผิดชอบ", "คุณภาพ", "รายงาน"];
@@ -432,42 +428,105 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
   const allScores = allEvals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
   const globalAvg = allScores.length ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
 
-  const exportDetail = (studentId: string) => {
-    const head = [
-      "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
-      "วันที่", "หัวข้อ", "สถานที่", "รายละเอียด", "ปัญหาที่พบ", "วิธีแก้", "ผลลัพธ์",
-      "อุปกรณ์ป้องกัน", "เครื่องมือ", "สถานะ",
-      "จำนวนผู้ประเมิน",
-      ...SCORE_CRITERIA.map(c => `เฉลี่ย: ${c.label}`),
-      "คะแนนเฉลี่ยรวม",
-    ];
-    const filtered = studentId === "ALL" ? reports : reports.filter(r => r.user.id === studentId);
-    const rows = filtered.map(r => {
-      const crit = avgPerCriteria(r.evaluations);
-      const overall = overallAvg(r.evaluations);
-      return [
-        r.user.name ?? "", r.user.nickname ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "",
-        r.date.slice(0, 10), r.title, r.location ?? "", r.description, r.learned ?? "", r.solution ?? "", r.result ?? "",
-        (r.ppe ?? []).join(", "), (r.tools ?? []).join(", "), STATUS_LABEL[r.status] ?? r.status,
-        r.evaluations.length,
-        ...SCORE_CRITERIA.map(c => crit[c.key] != null ? crit[c.key].toFixed(2) : ""),
-        overall != null ? overall.toFixed(2) : "",
-      ];
-    });
+  const exportXlsx = (studentId: string) => {
+    const date = new Date().toISOString().slice(0, 10);
     const name = studentId === "ALL" ? "ทั้งหมด" : (students.find(s => s.id === studentId)?.name ?? studentId);
-    makeCsv([head, ...rows], `SNTrainee_${name}_${new Date().toISOString().slice(0, 10)}.csv`);
-  };
 
-  const exportSummary = () => {
-    const head = ["ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา", "จำนวนรายงาน", "จำนวนการประเมิน",
-      ...SCORE_CRITERIA.map(c => c.label), "คะแนนเฉลี่ยรวม"];
-    const rows = studentStats.map(({ student: s, mine, allEvals, criteria, overall }) => [
-      s.name ?? "", s.nickname ?? "", s.level ? LEVEL_LABEL[s.level] : "", s.school ?? "",
-      mine.length, allEvals.length,
-      ...SCORE_CRITERIA.map(c => criteria[c.key] != null ? criteria[c.key].toFixed(2) : ""),
-      overall != null ? overall.toFixed(2) : "",
-    ]);
-    makeCsv([head, ...rows], `SNTrainee_สรุป_${new Date().toISOString().slice(0, 10)}.csv`);
+    // ── Sheet 1: ผลการประเมินรายบุคคล ──────────────────────────────────────────
+    const s1Head = ["#", "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
+      "บันทึก", "การประเมิน",
+      ...CRITERIA_SHORT.map(s => `คะแนน: ${s}`),
+      "เฉลี่ยรวม"];
+    const s1Rows: (string | number)[][] = [s1Head];
+    studentStats.forEach(({ student: s, mine, allEvals, criteria, overall }, i) => {
+      s1Rows.push([
+        i + 1, s.name ?? "", s.nickname ?? "",
+        s.level ? LEVEL_LABEL[s.level] : "", s.school ?? "",
+        mine.length, allEvals.length,
+        ...SCORE_CRITERIA.map(c => criteria[c.key] != null ? +criteria[c.key].toFixed(2) : ""),
+        overall != null ? +overall.toFixed(2) : "",
+      ]);
+    });
+    const ws1 = XLSX.utils.aoa_to_sheet(s1Rows);
+    ws1["!cols"] = [
+      { wch: 4 }, { wch: 22 }, { wch: 10 }, { wch: 7 }, { wch: 20 },
+      { wch: 7 }, { wch: 9 },
+      ...CRITERIA_SHORT.map(() => ({ wch: 12 })),
+      { wch: 10 },
+    ];
+
+    // ── Sheet 2: รายการบันทึกฝึกงาน ────────────────────────────────────────────
+    const targetStudents = studentId === "ALL"
+      ? studentStats.filter(ss => ss.mine.length > 0)
+      : studentStats.filter(ss => ss.student.id === studentId && ss.mine.length > 0);
+
+    const detailCols = [
+      "วันที่", "หัวข้องาน", "สถานที่",
+      "รายละเอียดงาน", "ปัญหาที่พบ", "วิธีแก้ไข", "ผลลัพธ์",
+      "เครื่องมือ/อุปกรณ์", "อุปกรณ์ป้องกัน",
+      "สถานะ", "ผู้ประเมิน", "เฉลี่ยรวม",
+      ...CRITERIA_SHORT.map(s => `คะแนน: ${s}`),
+    ];
+    const s2Rows: (string | number)[][] = [];
+    const merges: XLSX.Range[] = [];
+    let ri = 0;
+
+    targetStudents.forEach(({ student: s, mine }) => {
+      // Student section header row (merged across all columns)
+      const info = [
+        s.name ?? "", s.nickname ? `(${s.nickname})` : "",
+        s.level ? LEVEL_LABEL[s.level] : "", s.school ?? "",
+      ].filter(Boolean).join("  ·  ");
+      const sectionRow: (string | number)[] = [info, ...Array(detailCols.length - 1).fill("")];
+      s2Rows.push(sectionRow);
+      merges.push({ s: { r: ri, c: 0 }, e: { r: ri, c: detailCols.length - 1 } });
+      ri++;
+
+      // Column header
+      s2Rows.push(detailCols);
+      ri++;
+
+      // Report rows sorted by date
+      [...mine].sort((a, b) => a.date.localeCompare(b.date)).forEach(r => {
+        const crit = avgPerCriteria(r.evaluations);
+        const ov = overallAvg(r.evaluations);
+        s2Rows.push([
+          r.date.slice(0, 10),
+          truncate(r.title, 50),
+          truncate(r.location ?? "", 25),
+          truncate(r.description, 100),
+          truncate(r.learned ?? "", 80),
+          truncate(r.solution ?? "", 80),
+          truncate(r.result ?? "", 80),
+          truncate((r.tools ?? []).join(", "), 50),
+          truncate((r.ppe ?? []).join(", "), 60),
+          STATUS_LABEL[r.status] ?? r.status,
+          r.evaluations.length,
+          ov != null ? +ov.toFixed(2) : "",
+          ...SCORE_CRITERIA.map(c => crit[c.key] != null ? +crit[c.key].toFixed(2) : ""),
+        ]);
+        ri++;
+      });
+
+      // Blank separator
+      s2Rows.push(Array(detailCols.length).fill(""));
+      ri++;
+    });
+
+    const ws2 = XLSX.utils.aoa_to_sheet(s2Rows);
+    ws2["!merges"] = merges;
+    ws2["!cols"] = [
+      { wch: 12 }, { wch: 38 }, { wch: 20 },
+      { wch: 42 }, { wch: 38 }, { wch: 38 }, { wch: 38 },
+      { wch: 32 }, { wch: 38 },
+      { wch: 12 }, { wch: 9 }, { wch: 10 },
+      ...CRITERIA_SHORT.map(() => ({ wch: 12 })),
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, "ผลการประเมินรายบุคคล");
+    XLSX.utils.book_append_sheet(wb, ws2, "รายการบันทึกฝึกงาน");
+    XLSX.writeFile(wb, `SNTrainee_${name}_${date}.xlsx`);
   };
 
   return (
@@ -559,10 +618,10 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
             <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ตารางเปรียบเทียบรายหมวด</h2>
             <p className="text-xs text-gray-400">เฉลี่ยจากทุกรายงานและทุกพี่เลี้ยง · สเกล 1–5</p>
           </div>
-          <button onClick={exportSummary}
+          <button onClick={() => exportXlsx("ALL")}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium text-white"
             style={{ background: "#003E8E" }}>
-            ⬇ สรุปรายบุคคล (.csv)
+            ⬇ ดาวน์โหลด Excel (.xlsx)
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -627,21 +686,21 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
 
       {/* ── Export ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-        <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>ดาวน์โหลดข้อมูลรายละเอียด</h2>
-        <p className="text-xs text-gray-400 mb-4">ส่งออกเป็น Excel (.csv) พร้อมข้อมูลทุกบันทึก คะแนนแต่ละหมวด และข้อเสนอแนะ</p>
+        <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>ดาวน์โหลดข้อมูล</h2>
+        <p className="text-xs text-gray-400 mb-4">ไฟล์ Excel 2 sheets — ผลการประเมินรายบุคคล + รายการบันทึกฝึกงาน (จัดหมวดตามนักศึกษา)</p>
         <div className="flex flex-wrap items-center gap-3">
           <select value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white flex-1 min-w-[180px]">
             <option value="ALL">ทุกคน (รวมทั้งหมด)</option>
             {students.map(s => <option key={s.id} value={s.id}>{s.name}{s.nickname ? ` (${s.nickname})` : ""}</option>)}
           </select>
-          <button onClick={() => exportDetail(selectedStudentId)}
+          <button onClick={() => exportXlsx(selectedStudentId)}
             className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium text-white whitespace-nowrap"
             style={{ background: "#059669" }}>
-            ⬇ ดาวน์โหลด Excel (.csv)
+            ⬇ ดาวน์โหลด Excel (.xlsx)
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-3">เปิดด้วย Microsoft Excel หรือ Google Sheets — ใช้ UTF-8 encoding</p>
+        <p className="text-xs text-gray-400 mt-3">เปิดด้วย Microsoft Excel — Sheet 1: สรุปคะแนน · Sheet 2: รายการบันทึกทั้งหมด</p>
       </div>
     </div>
   );
