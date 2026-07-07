@@ -10,7 +10,7 @@ import {
 type Rep = {
   id: string; date: string; title: string; description: string;
   jobType: string | null; systemCategory: string | null; location: string | null;
-  tools: string[]; ppe: string[]; learned: string | null;
+  tools: string[]; ppe: string[]; learned: string | null; solution: string | null;
   status: string; assignedMentorId: string | null; mentorComment: string | null;
   scores: Record<string, number> | null;
   user: { name: string | null; image: string | null; level: string | null; school: string | null };
@@ -30,6 +30,15 @@ export default function MentorView({ meId, meName, meImage, reports: initial }: 
   const onDone = (updated: Rep) => {
     setReports(prev => prev.map(r => (r.id === updated.id ? { ...r, ...updated } : r)));
     setEvalTarget(null);
+  };
+
+  const selfAssign = async (reportId: string) => {
+    const res = await fetch("/api/admin", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "assign", reportId, mentorId: meId }),
+    });
+    if (res.ok) setReports(prev => prev.map(r => r.id === reportId ? { ...r, assignedMentorId: meId, status: "PENDING_APPROVAL" } : r));
+    else alert("รับงานไม่สำเร็จ");
   };
 
   return (
@@ -71,7 +80,8 @@ export default function MentorView({ meId, meName, meImage, reports: initial }: 
                       <p className="text-gray-500 text-sm mt-1">{r.description}</p>
                       {r.tools.length > 0 && <p className="text-xs text-gray-400 mt-1">🔧 {r.tools.join(", ")}</p>}
                       {r.ppe.length > 0 && <p className="text-xs text-green-600 mt-1">🦺 {r.ppe.length} รายการความปลอดภัย</p>}
-                      {r.learned && <p className="text-sm text-gray-500 mt-1"><span className="font-medium">สิ่งที่เรียนรู้:</span> {r.learned}</p>}
+                      {r.learned && <p className="text-xs text-gray-500 mt-1"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
+                      {r.solution && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
                       {r.mentorComment && (
                         <div className="mt-2 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">
                           <span className="font-medium">ความเห็น:</span> {r.mentorComment}
@@ -85,9 +95,14 @@ export default function MentorView({ meId, meName, meImage, reports: initial }: 
                         </div>
                       )}
                     </div>
-                    {canAct && r.status !== "APPROVED" && (
-                      <button onClick={() => setEvalTarget(r)} className="shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-sm px-3 py-1.5 rounded-lg font-medium">ตรวจงาน</button>
-                    )}
+                    <div className="flex flex-col gap-2 shrink-0">
+                      {!r.assignedMentorId && (
+                        <button onClick={() => selfAssign(r.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: "#003E8E" }}>รับงาน</button>
+                      )}
+                      {canAct && r.status !== "APPROVED" && (
+                        <button onClick={() => setEvalTarget(r)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: "#16a34a" }}>ตรวจงาน</button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

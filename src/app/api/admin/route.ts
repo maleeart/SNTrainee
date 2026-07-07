@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// admin: มอบหมายพี่เลี้ยง หรือ เปลี่ยน role
+// admin: มอบหมายพี่เลี้ยง หรือ เปลี่ยน role; mentor: รับงานตัวเอง
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (session?.user?.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = session.user.role;
+  if (role !== "ADMIN" && role !== "MENTOR") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json();
 
   if (b.op === "assign") {
+    // MENTOR ทำได้เฉพาะ assign ตัวเอง
+    if (role === "MENTOR" && b.mentorId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const report = await prisma.report.update({
       where: { id: b.reportId },
       data: {
@@ -19,6 +25,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(report);
   }
+
+  // role change — ADMIN only
+  if (role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   if (b.op === "role") {
     const user = await prisma.user.update({

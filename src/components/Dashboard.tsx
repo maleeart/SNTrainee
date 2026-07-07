@@ -10,7 +10,7 @@ import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; image?: string | null; role?: string };
 type Scores = Record<string, number>;
-type ReportEx = Report & { images: string[]; editReason: string | null };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
@@ -47,7 +47,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
 
   const blank = (): ReportEx => ({
     id: "", date: new Date(today), title: "", description: "", tasks: [],
-    jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null,
+    jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null, solution: null,
     images: [], editReason: null,
     userId: user.id ?? "", assignedMentorId: null, status: "PENDING_ASSIGN",
     mentorComment: null, scores: null, evaluatedAt: null,
@@ -155,6 +155,12 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                     <h3 className="font-semibold text-gray-800 truncate">{r.title}</h3>
                     {r.location && <p className="text-xs text-gray-400 mt-0.5">📍 {r.location}</p>}
                     <p className="text-gray-500 text-sm mt-1 line-clamp-2">{r.description}</p>
+                    {(r.learned || r.solution) && (
+                      <div className="mt-2 space-y-1">
+                        {r.learned && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
+                        {r.solution && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
+                      </div>
+                    )}
                     {r.mentorComment && (
                       <div className="mt-2 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">
                         <span className="font-medium">พี่เลี้ยง:</span> {r.mentorComment}
@@ -238,8 +244,11 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                     ))}
                   </div>
                 </F>
-                <F label="ปัญหา / สิ่งที่เรียนรู้">
-                  <textarea rows={2} className="input resize-none" value={editing.learned ?? ""} onChange={e => set({ learned: e.target.value })} />
+                <F label="ปัญหาที่พบ">
+                  <textarea rows={2} className="input resize-none" value={editing.learned ?? ""} onChange={e => set({ learned: e.target.value })} placeholder="ระบุปัญหาหรืออุปสรรคที่พบ..." />
+                </F>
+                <F label="วิธีการแก้ปัญหา">
+                  <textarea rows={2} className="input resize-none" value={editing.solution ?? ""} onChange={e => set({ solution: e.target.value })} placeholder="วิธีที่ใช้แก้ไขหรือแนวทางที่ใช้..." />
                 </F>
 
                 {/* Image upload */}

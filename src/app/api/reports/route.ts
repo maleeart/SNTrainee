@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     tools: b.tools ?? [],
     ppe: b.ppe ?? [],
     learned: b.learned || null,
+    solution: b.solution || null,
     images: b.images ?? [],
     editReason: b.editReason || null,
   };

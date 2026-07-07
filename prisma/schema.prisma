@@ -109,7 +109,8 @@ model Report {
   location       String? // อาคาร/ชั้น/บริเวณ
   tools          String[]        @default([])
   ppe            String[]        @default([]) // รายการความปลอดภัยที่ทำ
-  learned        String?         @db.Text // ปัญหา/สิ่งที่เรียนรู้
+  learned        String?         @db.Text // ปัญหาที่พบ
+  solution       String?         @db.Text // วิธีการแก้ปัญหา
   images         String[]        @default([]) // URLs รูปภาพประกอบ
   editReason     String?         @db.Text // เหตุผลที่แก้ไข
 
