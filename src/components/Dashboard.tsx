@@ -41,6 +41,8 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [reasonPopup, setReasonPopup] = useState(false);
+  const [editReason, setEditReason] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -54,14 +56,14 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     createdAt: new Date(), updatedAt: new Date(),
   });
 
-  const save = async () => {
+  const save = async (reason?: string) => {
     if (!editing) return;
     if (!editing.title.trim()) return alert("กรุณากรอกหัวข้องาน");
-    const isEdit = !!editing.id;
-    if (isEdit && !editing.editReason?.trim()) return alert("กรุณาระบุเหตุผลที่แก้ไข");
+    // ถ้าแก้ไข และยังไม่มี reason → เปิด popup
+    if (editing.id && !reason) { setEditReason(""); setReasonPopup(true); return; }
     const res = await fetch("/api/reports", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...editing, date: iso(editing.date) }),
+      body: JSON.stringify({ ...editing, date: iso(editing.date), editReason: reason ?? null }),
     });
     if (!res.ok) return alert((await res.json()).error ?? "บันทึกไม่สำเร็จ");
     const saved: ReportEx = await res.json();
@@ -277,20 +279,31 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                   </div>
                 </F>
 
-                {/* Edit reason — required when editing existing report */}
-                {editing.id && (
-                  <F label="เหตุผลที่แก้ไข *">
-                    <textarea rows={2} className="input resize-none border-amber-200 bg-amber-50/30"
-                      value={editing.editReason ?? ""}
-                      onChange={e => set({ editReason: e.target.value })}
-                      placeholder="ระบุสาเหตุหรือสิ่งที่ต้องการแก้ไข..." />
-                  </F>
-                )}
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={save} disabled={uploading} className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-50" style={{ background: "#003E8E" }}>บันทึก</button>
+                <button onClick={() => save()} disabled={uploading} className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-50" style={{ background: "#003E8E" }}>บันทึก</button>
                 <button onClick={() => setEditing(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ยกเลิก</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reasonPopup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="font-bold text-gray-800 mb-1">ระบุเหตุผลที่แก้ไข</h3>
+            <p className="text-xs text-gray-400 mb-3">จำเป็นต้องระบุเพื่อให้พี่เลี้ยงทราบสาเหตุ</p>
+            <textarea rows={3} autoFocus className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none focus:border-amber-400"
+              value={editReason} onChange={e => setEditReason(e.target.value)}
+              placeholder="เช่น แก้ไขรายละเอียดงานที่บันทึกผิด..." />
+            <div className="flex gap-3 mt-4">
+              <button disabled={!editReason.trim() || uploading}
+                onClick={() => { setReasonPopup(false); save(editReason); }}
+                className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-40"
+                style={{ background: "#003E8E" }}>ยืนยัน</button>
+              <button onClick={() => setReasonPopup(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ยกเลิก</button>
             </div>
           </div>
         </div>
