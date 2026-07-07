@@ -347,7 +347,7 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead style={{ background: "#F4F6FB" }}>
-                  <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th><Th>สถานะ</Th></tr>
+                  <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {list.map(u => (
@@ -371,9 +371,6 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
                             </select>
                           )}
                       </td>
-                      <Td>
-                        {u.profileDone ? <span className="text-xs text-green-600">✓ ครบ</span> : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
-                      </Td>
                     </tr>
                   ))}
                 </tbody>
