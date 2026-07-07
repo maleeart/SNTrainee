@@ -603,7 +603,34 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-0.5">ประเมินงาน</h2>
-        <p className="text-sm text-gray-500 mb-4">{report.user.name} · {report.title} · {report.date.slice(0, 10)}</p>
+        <p className="text-sm text-gray-500 mb-1">{report.user.name}{report.user.nickname ? ` (${report.user.nickname})` : ""}</p>
+        <p className="text-xs text-gray-400 mb-4">{report.date.slice(0, 10)}</p>
+
+        {/* Report details */}
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-5 space-y-2.5 text-sm">
+          <p className="font-semibold text-gray-800">{report.title}</p>
+          {report.location && <p className="text-xs text-gray-500">📍 {report.location}</p>}
+          <p className="text-gray-600 whitespace-pre-wrap">{report.description}</p>
+          {report.learned && (
+            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ปัญหาที่พบ</span><p className="text-gray-600 mt-0.5">{report.learned}</p></div>
+          )}
+          {report.solution && (
+            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">วิธีแก้ปัญหา</span><p className="text-gray-600 mt-0.5">{report.solution}</p></div>
+          )}
+          {report.result && (
+            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ผลลัพธ์</span><p className="text-gray-600 mt-0.5">{report.result}</p></div>
+          )}
+          {report.tools.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {report.tools.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{t}</span>)}
+            </div>
+          )}
+          {report.ppe.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {report.ppe.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">🦺 {t}</span>)}
+            </div>
+          )}
+        </div>
 
         <p className="text-sm font-medium text-gray-700 mb-3">คะแนนแต่ละหมวด (1–5)</p>
         <div className="space-y-4 mb-4">
