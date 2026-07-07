@@ -21,8 +21,7 @@ export default async function DashboardPage() {
 
   const reports = rawReports.map(r => {
     const evals = r.evaluations as { scores: Record<string, number> }[];
-    const all = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
-    const evalSummary = { count: evals.length, overall: all.length ? (all.reduce((a, b) => a + b, 0) / all.length).toFixed(1) : "-" };
+    const evalSummary = { count: evals.length };
     const { evaluations: _, ...rest } = r;
     return { ...rest, evalSummary };
   });

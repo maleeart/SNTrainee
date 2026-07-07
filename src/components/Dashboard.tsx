@@ -6,8 +6,7 @@ import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
-type EvalSum = { count: number; overall: string };
-type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: EvalSum };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number } };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
@@ -154,7 +153,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                     )}
                     {r.evalSummary && r.evalSummary.count > 0 && (
                       <div className="mt-2 text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg">
-                        👥 {r.evalSummary.count} พี่เลี้ยงประเมิน · เฉลี่ย {r.evalSummary.overall}
+                        👥 ประเมินแล้วโดยพี่เลี้ยง {r.evalSummary.count} คน
                       </div>
                     )}
                     {r.images?.length > 0 && (
