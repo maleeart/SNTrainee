@@ -607,29 +607,33 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
         <p className="text-xs text-gray-400 mb-4">{report.date.slice(0, 10)}</p>
 
         {/* Report details */}
-        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-5 space-y-2.5 text-sm">
-          <p className="font-semibold text-gray-800">{report.title}</p>
-          {report.location && <p className="text-xs text-gray-500">📍 {report.location}</p>}
-          <p className="text-gray-600 whitespace-pre-wrap">{report.description}</p>
-          {report.learned && (
-            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ปัญหาที่พบ</span><p className="text-gray-600 mt-0.5">{report.learned}</p></div>
-          )}
-          {report.solution && (
-            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">วิธีแก้ปัญหา</span><p className="text-gray-600 mt-0.5">{report.solution}</p></div>
-          )}
-          {report.result && (
-            <div><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ผลลัพธ์</span><p className="text-gray-600 mt-0.5">{report.result}</p></div>
-          )}
-          {report.tools.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {report.tools.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{t}</span>)}
-            </div>
-          )}
-          {report.ppe.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {report.ppe.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">🦺 {t}</span>)}
-            </div>
-          )}
+        <div className="rounded-xl border border-blue-100 mb-5 overflow-hidden text-sm">
+          <div className="px-4 py-3" style={{ background: "linear-gradient(135deg,#003E8E,#0052b4)" }}>
+            <p className="font-bold text-white text-base leading-snug">{report.title}</p>
+            {report.location && <p className="text-blue-200 text-xs mt-0.5">📍 {report.location}</p>}
+          </div>
+          <div className="divide-y divide-gray-100">
+            <RDa label="รายละเอียดงาน" icon="📋">{report.description}</RDa>
+            {report.learned && <RDa label="ปัญหาที่พบ" icon="⚠️">{report.learned}</RDa>}
+            {report.solution && <RDa label="วิธีแก้ปัญหา" icon="🔧">{report.solution}</RDa>}
+            {report.result && <RDa label="ผลลัพธ์และสิ่งที่ได้รับ" icon="✅">{report.result}</RDa>}
+            {report.tools.length > 0 && (
+              <div className="px-4 py-3 bg-white">
+                <p className="text-xs font-semibold text-gray-500 mb-2">🔩 เครื่องมือ/อุปกรณ์ที่ใช้</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {report.tools.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{t}</span>)}
+                </div>
+              </div>
+            )}
+            {report.ppe.length > 0 && (
+              <div className="px-4 py-3 bg-white">
+                <p className="text-xs font-semibold text-gray-500 mb-2">🦺 อุปกรณ์ป้องกันที่ใช้</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {report.ppe.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#FEF9C3", color: "#92400E" }}>{t}</span>)}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <p className="text-sm font-medium text-gray-700 mb-3">คะแนนแต่ละหมวด (1–5)</p>
@@ -667,6 +671,15 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
           <button disabled={busy} onClick={onClose} className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RDa({ label, icon, children }: { label: string; icon: string; children: React.ReactNode }) {
+  return (
+    <div className="px-4 py-3 bg-white">
+      <p className="text-xs font-semibold text-gray-500 mb-1">{icon} {label}</p>
+      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{children as string}</p>
     </div>
   );
 }
