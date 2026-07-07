@@ -1,5 +1,5 @@
 export const ROLE_LABEL: Record<string, string> = {
-  STUDENT: "นักศึกษา",
+  STUDENT: "นักศึกษาฝึกงาน",
   MENTOR: "พี่เลี้ยง",
   ADMIN: "ผู้ดูแลระบบ",
   EXECUTIVE: "ผู้สังเกตการณ์",

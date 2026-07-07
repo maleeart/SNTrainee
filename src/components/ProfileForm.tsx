@@ -11,7 +11,7 @@ type PickedRole = "STUDENT" | "MENTOR" | "EXECUTIVE";
 
 const ROLE_OPTIONS: { role: PickedRole; label: string; sub: string; icon: string }[] = [
   { role: "STUDENT", label: "นักศึกษาฝึกงาน", sub: "บันทึกรายงานประจำวันและติดตามการประเมิน", icon: "🎓" },
-  { role: "MENTOR", label: "พี่เลี้ยง", sub: "ตรวจสอบและประเมินผลงานนักศึกษา", icon: "👷" },
+  { role: "MENTOR", label: "พี่เลี้ยง", sub: "ตรวจสอบและประเมินผลงานนักศึกษาฝึกงาน", icon: "👷" },
   { role: "EXECUTIVE", label: "ผู้สังเกตการณ์", sub: "ดูภาพรวมและโหลดรายงาน ไม่สามารถแก้ไขได้", icon: "👁️" },
 ];
 

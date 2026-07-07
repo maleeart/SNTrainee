@@ -52,7 +52,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   };
 
   const exportCsv = () => {
-    const head = ["วันที่", "นักศึกษา", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "สถานะ", "จำนวนผู้ประเมิน", "คะแนนเฉลี่ย"];
+    const head = ["วันที่", "นักศึกษาฝึกงาน", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "สถานะ", "จำนวนผู้ประเมิน", "คะแนนเฉลี่ย"];
     const rows = reports.map(r => {
       const avg = overallAvg(r.evaluations);
       return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.location ?? "", r.title, STATUS_LABEL[r.status] ?? r.status, r.evaluations.length, avg != null ? avg.toFixed(2) : ""];
@@ -145,7 +145,7 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
 
       {studentStats.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-          <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษา</h2>
+          <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษาฝึกงาน</h2>
           <p className="text-xs text-gray-400 mb-6">เฉลี่ยจากทุกหมวดคะแนน ทุกการประเมิน · สเกล 1–5</p>
           <ScoreBarChart stats={studentStats} />
         </div>
@@ -276,7 +276,7 @@ function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId:
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>รายงาน</h1>
-          <p className="text-sm text-gray-500">รายการรายงานนักศึกษาทั้งหมด</p>
+          <p className="text-sm text-gray-500">รายการรายงานนักศึกษาฝึกงานทั้งหมด</p>
         </div>
         <select value={filter} onChange={e => setFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
           <option value="ALL">ทั้งหมด</option>
@@ -287,7 +287,7 @@ function ReportsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId:
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th>{!readOnly && <Th> </Th>}</tr>
+            <tr><Th>วันที่</Th><Th>นักศึกษาฝึกงาน</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th>{!readOnly && <Th> </Th>}</tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.map(r => {

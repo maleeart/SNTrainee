@@ -17,7 +17,7 @@ type Rep = {
   location: string | null; tools: string[]; ppe: string[];
   learned: string | null; solution: string | null; result: string | null;
   status: string;
-  user: { name: string | null; image: string | null; level: string | null; school: string | null };
+  user: { name: string | null; nickname: string | null; image: string | null; level: string | null; school: string | null };
   evaluations: EvalRecord[];
 };
 
@@ -64,7 +64,7 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
       <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role="MENTOR" profileHref="/profile" />
 
       <main className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษา</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษาฝึกงาน</h1>
         <p className="text-gray-500 text-sm mb-6">ประเมินให้คะแนนได้ทุกรายงาน — คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
 
         <div className="flex gap-2 mb-6">
@@ -97,6 +97,7 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       <div className="flex items-center gap-2 text-sm text-gray-700">
                         {r.user.image && <img src={r.user.image} className="w-5 h-5 rounded-full" alt="" />}
                         <span className="font-medium">{r.user.name}</span>
+                        {r.user.nickname && <span className="text-xs text-gray-500">({r.user.nickname})</span>}
                         {r.user.level && <span className="text-xs text-gray-400">{LEVEL_LABEL[r.user.level]}</span>}
                       </div>
                       <h3 className="font-semibold text-gray-800 mt-1">{r.title}</h3>
@@ -183,7 +184,7 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-0.5">ประเมินงาน</h2>
-        <p className="text-sm text-gray-500 mb-1">{report.user.name} · {report.title}</p>
+        <p className="text-sm text-gray-500 mb-1">{report.user.name}{report.user.nickname ? ` (${report.user.nickname})` : ""} · {report.title}</p>
         <p className="text-xs text-gray-400 mb-4">{fmt(report.date)}</p>
 
         <p className="text-sm font-medium text-gray-700 mb-3">คะแนนแต่ละหมวด (1–5)</p>
