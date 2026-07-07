@@ -45,7 +45,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
   const [editReason, setEditReason] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
 
   const blank = (): ReportEx => ({
     id: "", date: new Date(today), title: "", description: "", tasks: [],
@@ -189,9 +189,11 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     {r.status !== "APPROVED" && (
-                      <button onClick={() => { setEditing({ ...r }); setToolInput(""); }} className="text-sm font-medium" style={{ color: "#003E8E" }}>แก้ไข</button>
+                      <button onClick={() => { setEditing({ ...r }); setToolInput(""); setPpeInput(""); }} className="text-sm font-medium" style={{ color: "#003E8E" }}>แก้ไข</button>
                     )}
-                    <button onClick={() => del(r.id)} className="text-sm text-red-400 hover:text-red-600">ลบ</button>
+                    {r.status !== "APPROVED" && (
+                      <button onClick={() => del(r.id)} className="text-sm text-red-400 hover:text-red-600">ลบ</button>
+                    )}
                   </div>
                 </div>
               </div>

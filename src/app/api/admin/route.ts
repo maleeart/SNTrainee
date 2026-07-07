@@ -16,6 +16,9 @@ export async function POST(req: NextRequest) {
     if (role === "MENTOR" && b.mentorId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    const target = await prisma.report.findUnique({ where: { id: b.reportId } });
+    if (!target) return NextResponse.json({ error: "ไม่พบรายงาน" }, { status: 404 });
+    if (target.status === "APPROVED") return NextResponse.json({ error: "รายงานที่อนุมัติแล้วเปลี่ยนพี่เลี้ยงไม่ได้" }, { status: 400 });
     const report = await prisma.report.update({
       where: { id: b.reportId },
       data: {
