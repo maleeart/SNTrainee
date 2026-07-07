@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import AppNav from "./AppNav";
 import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
@@ -27,6 +28,7 @@ function overallAvg(evals: EvalRecord[]): number | null {
 export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports }: {
   readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[];
 }) {
+  const router = useRouter();
   const [users, setUsers] = useState<U[]>(initUsers);
   const [reports, setReports] = useState<Rep[]>(initReports);
   const [tab, setTab] = useState<Tab>("overview");
@@ -68,8 +70,14 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       </div>
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 relative">
         <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
+        <button onClick={() => router.refresh()} title="รีเฟรชข้อมูล"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+          </svg>
+        </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -257,53 +265,162 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
 
 function LogsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; onEval: (r: Rep) => void }) {
   const [filter, setFilter] = useState("ALL");
-  const filtered = filter === "ALL" ? reports : reports.filter(r => r.status === filter);
+  const [studentFilter, setStudentFilter] = useState("ALL");
+
+  // unique students from reports
+  const studentList = Array.from(new Map(reports.map(r => [r.user.id, r.user])).values());
+
+  const filtered = reports.filter(r =>
+    (filter === "ALL" || r.status === filter) &&
+    (studentFilter === "ALL" || r.user.id === studentFilter)
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>บันทึกการฝึกงาน</h1>
-          <p className="text-sm text-gray-500">บันทึกการฝึกงานทั้งหมด</p>
+          <p className="text-sm text-gray-500">{filtered.length} รายการ</p>
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
-          <option value="ALL">ทั้งหมด</option>
-          <option value="PENDING">รอประเมิน</option>
-          <option value="SCORED">ประเมินแล้ว</option>
-        </select>
+        <div className="flex gap-2 flex-wrap">
+          <select value={studentFilter} onChange={e => setStudentFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="ALL">นักศึกษาทุกคน</option>
+            {studentList.map(u => <option key={u.id} value={u.id}>{u.name}{u.nickname ? ` (${u.nickname})` : ""}</option>)}
+          </select>
+          <select value={filter} onChange={e => setFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="ALL">ทุกสถานะ</option>
+            <option value="PENDING">รอประเมิน</option>
+            <option value="SCORED">ประเมินแล้ว</option>
+          </select>
+        </div>
       </div>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษาฝึกงาน</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th>{!readOnly && <Th> </Th>}</tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map(r => {
-              const avg = overallAvg(r.evaluations);
-              const myEval = r.evaluations.find(e => e.mentorId === meId);
-              return (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <Td className="whitespace-nowrap text-gray-500">{r.date.slice(0, 10)}</Td>
-                  <Td><span className="font-medium text-gray-800">{r.user.name}</span>{r.user.level && <span className="text-xs text-gray-400 ml-1">{LEVEL_LABEL[r.user.level]}</span>}</Td>
-                  <Td><span className="font-medium">{r.title}</span>{r.location && <div className="text-xs text-gray-400">📍 {r.location}</div>}</Td>
-                  <Td><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span></Td>
-                  <Td className="text-center text-gray-500">{r.evaluations.length > 0 ? `${r.evaluations.length} คน` : <span className="text-gray-300">—</span>}</Td>
-                  <Td className="text-center">
-                    {avg != null ? <span className="font-semibold" style={{ color: "#003E8E" }}>{avg.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
-                  </Td>
+
+      <div className="space-y-4">
+        {filtered.map(r => {
+          const avg = overallAvg(r.evaluations);
+          const myEval = r.evaluations.find(e => e.mentorId === meId);
+          const tools = r.tools ?? [];
+          const ppe = r.ppe ?? [];
+          return (
+            <div key={r.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              {/* Card header */}
+              <div className="px-5 py-3 flex items-start justify-between gap-3 flex-wrap"
+                style={{ background: "linear-gradient(135deg,#003E8E,#0052b4)" }}>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-white text-base leading-snug">{r.title}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    <span className="text-blue-200 text-xs">
+                      👤 {r.user.name}{r.user.nickname ? ` (${r.user.nickname})` : ""}{r.user.level ? ` · ${LEVEL_LABEL[r.user.level]}` : ""}
+                    </span>
+                    <span className="text-blue-200 text-xs">📅 {r.date.slice(0, 10)}</span>
+                    {r.location && <span className="text-blue-200 text-xs">📍 {r.location}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>
+                    {STATUS_LABEL[r.status]}
+                  </span>
                   {!readOnly && (
-                    <Td>
-                      <button onClick={() => onEval(r)} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white whitespace-nowrap"
-                        style={{ background: myEval ? "#6366f1" : "#003E8E" }}>
-                        {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
-                      </button>
-                    </Td>
+                    <button onClick={() => onEval(r)}
+                      className="text-xs px-3 py-1 rounded-lg font-medium text-white border border-white/30 hover:bg-white/10 whitespace-nowrap">
+                      {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
+                    </button>
                   )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="divide-y divide-gray-50 text-sm">
+                {/* รายละเอียดงาน */}
+                <div className="px-5 py-3">
+                  <p className="text-xs font-semibold text-gray-400 mb-1">📋 รายละเอียดงาน</p>
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{r.description || <span className="text-gray-300 italic">—</span>}</p>
+                </div>
+
+                {/* ปัญหา / วิธีแก้ / ผลลัพธ์ */}
+                {(r.learned || r.solution || r.result) && (
+                  <div className="px-5 py-3 grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
+                    {r.learned && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1">⚠️ ปัญหาที่พบ</p>
+                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{r.learned}</p>
+                      </div>
+                    )}
+                    {r.solution && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1">🔧 วิธีแก้ไข</p>
+                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{r.solution}</p>
+                      </div>
+                    )}
+                    {r.result && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1">✅ ผลลัพธ์</p>
+                        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{r.result}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tools + PPE */}
+                {(tools.length > 0 || ppe.length > 0) && (
+                  <div className="px-5 py-3 flex flex-wrap gap-4">
+                    {tools.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1.5">🔩 เครื่องมือ/อุปกรณ์ที่ใช้</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {tools.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{t}</span>)}
+                        </div>
+                      </div>
+                    )}
+                    {ppe.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 mb-1.5">🦺 อุปกรณ์ป้องกันที่ใช้</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ppe.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#FEF9C3", color: "#92400E" }}>{t}</span>)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Images */}
+                {r.images?.length > 0 && (
+                  <div className="px-5 py-3">
+                    <p className="text-xs font-semibold text-gray-400 mb-2">📷 รูปภาพประกอบ</p>
+                    <div className="flex flex-wrap gap-2">
+                      {r.images.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt={`รูป ${i + 1}`} className="h-28 w-auto rounded-xl object-cover border border-gray-200 hover:opacity-90 transition-opacity" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Evaluation summary */}
+                {r.evaluations.length > 0 && (
+                  <div className="px-5 py-3 bg-gray-50/50 flex items-center gap-4 flex-wrap">
+                    <span className="text-xs text-gray-500">👥 ประเมินแล้ว {r.evaluations.length} คน</span>
+                    {avg != null && (
+                      <span className="text-sm font-bold" style={{ color: "#003E8E" }}>คะแนนเฉลี่ย {avg.toFixed(2)} / 5.00</span>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                      {r.evaluations.map(e => (
+                        <span key={e.mentorId}>{e.mentor.nickname ?? e.mentor.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="text-center py-16 text-gray-400 text-sm">ไม่พบรายการ</div>
+        )}
       </div>
     </div>
   );
