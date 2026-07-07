@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
   // resubmit after edit → กลับไปรอสถานะที่เหมาะสม
   const status = existing?.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
 
-  // เมื่อแก้ไข report ที่มีอยู่ ต้องระบุเหตุผล
-  if (existing && !b.editReason?.trim()) {
+  // เมื่อแก้ไข (client ส่ง id มา) ต้องระบุเหตุผล
+  if (b.id && !b.editReason?.trim()) {
     return NextResponse.json({ error: "กรุณาระบุเหตุผลที่แก้ไข" }, { status: 400 });
   }
 
