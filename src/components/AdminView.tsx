@@ -325,10 +325,98 @@ function makeCsv(rows: (string | number)[][], filename: string) {
   a.download = filename; a.click();
 }
 
+// Short labels for radar chart vertices
+const CRITERIA_SHORT = ["ทักษะ", "ปลอดภัย", "รับผิดชอบ", "คุณภาพ", "รายงาน"];
+
+function RadarChart({ scores, size = 160 }: { scores: Record<string, number>; size?: number }) {
+  const cx = size / 2, cy = size / 2;
+  const r = size * 0.34;
+  const n = SCORE_CRITERIA.length;
+  const angle = (i: number) => Math.PI * (-0.5 + (2 * i) / n);
+  const pt = (i: number, val: number) => {
+    const a = angle(i);
+    const rr = r * Math.max(0, val) / 5;
+    return [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
+  };
+  const outerPt = (i: number, scale = 1) => {
+    const a = angle(i);
+    return [cx + r * scale * Math.cos(a), cy + r * scale * Math.sin(a)];
+  };
+  const levelPoints = (level: number) =>
+    SCORE_CRITERIA.map((_, i) => outerPt(i, level / 5).join(",")).join(" ");
+  const dataPoints = SCORE_CRITERIA.map((c, i) => pt(i, scores[c.key] ?? 0).join(",")).join(" ");
+
+  // label anchor logic per axis
+  const anchor = (i: number): React.SVGAttributes<SVGTextElement>["textAnchor"] => {
+    if (i === 0) return "middle";
+    if (i === 1 || i === 2) return "start";
+    return "end";
+  };
+  const labelOffset = (i: number) => {
+    const a = angle(i);
+    const lr = r + 14;
+    return [cx + lr * Math.cos(a), cy + lr * Math.sin(a)];
+  };
+
+  const hasData = SCORE_CRITERIA.some(c => (scores[c.key] ?? 0) > 0);
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      {/* Background levels */}
+      {[1,2,3,4,5].map(level => (
+        <polygon key={level} points={levelPoints(level)}
+          fill={level === 5 ? "#EEF2FF" : "none"}
+          stroke="#E2E8F0" strokeWidth="0.6" />
+      ))}
+      {/* Axis lines */}
+      {SCORE_CRITERIA.map((_, i) => {
+        const [ox, oy] = outerPt(i);
+        return <line key={i} x1={cx} y1={cy} x2={ox} y2={oy} stroke="#CBD5E1" strokeWidth="0.6" />;
+      })}
+      {/* Data polygon */}
+      {hasData && (
+        <polygon points={dataPoints}
+          fill="rgba(0,62,142,0.18)" stroke="#003E8E" strokeWidth="1.8"
+          strokeLinejoin="round" />
+      )}
+      {/* Data dots */}
+      {hasData && SCORE_CRITERIA.map((c, i) => {
+        const [px, py] = pt(i, scores[c.key] ?? 0);
+        return <circle key={i} cx={px} cy={py} r="2.8" fill="#003E8E" />;
+      })}
+      {/* Axis labels */}
+      {SCORE_CRITERIA.map((_, i) => {
+        const [lx, ly] = labelOffset(i);
+        return (
+          <text key={i} x={lx} y={ly} textAnchor={anchor(i)} dominantBaseline="middle"
+            fontSize="9.5" fill="#64748B" fontWeight="500">
+            {CRITERIA_SHORT[i]}
+          </text>
+        );
+      })}
+      {/* Center score */}
+      {hasData && (
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
+          fontSize="11" fill="#003E8E" fontWeight="700">
+          {(SCORE_CRITERIA.reduce((s, c) => s + (scores[c.key] ?? 0), 0) / n).toFixed(1)}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+function ScoreColor(v: number | null): { bg: string; fg: string } {
+  if (v == null) return { bg: "#F3F4F6", fg: "#9CA3AF" };
+  if (v >= 4.5) return { bg: "#DCFCE7", fg: "#15803D" };
+  if (v >= 3.5) return { bg: "#D1FAE5", fg: "#16A34A" };
+  if (v >= 3)   return { bg: "#FEF9C3", fg: "#A16207" };
+  if (v >= 2)   return { bg: "#FEE2E2", fg: "#DC2626" };
+  return { bg: "#FEE2E2", fg: "#B91C1C" };
+}
+
 function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
   const [selectedStudentId, setSelectedStudentId] = useState("ALL");
 
-  // Analytics: per student × per criterion
   const studentStats = students.map(s => {
     const mine = reports.filter(r => r.user.id === s.id);
     const allEvals = mine.flatMap(r => r.evaluations);
@@ -337,7 +425,13 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     return { student: s, mine, allEvals, criteria, overall };
   });
 
-  // Export: detail rows for one student or all
+  // Summary stats
+  const totalReports = reports.length;
+  const scoredReports = reports.filter(r => r.status === "SCORED").length;
+  const allEvals = reports.flatMap(r => r.evaluations);
+  const allScores = allEvals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
+  const globalAvg = allScores.length ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+
   const exportDetail = (studentId: string) => {
     const head = [
       "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
@@ -354,7 +448,7 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
       return [
         r.user.name ?? "", r.user.nickname ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "",
         r.date.slice(0, 10), r.title, r.location ?? "", r.description, r.learned ?? "", r.solution ?? "", r.result ?? "",
-        r.ppe.join(", "), r.tools.join(", "), STATUS_LABEL[r.status] ?? r.status,
+        (r.ppe ?? []).join(", "), (r.tools ?? []).join(", "), STATUS_LABEL[r.status] ?? r.status,
         r.evaluations.length,
         ...SCORE_CRITERIA.map(c => crit[c.key] != null ? crit[c.key].toFixed(2) : ""),
         overall != null ? overall.toFixed(2) : "",
@@ -364,7 +458,6 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     makeCsv([head, ...rows], `SNTrainee_${name}_${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
-  // Export: summary one row per student
   const exportSummary = () => {
     const head = ["ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา", "จำนวนรายงาน", "จำนวนการประเมิน",
       ...SCORE_CRITERIA.map(c => c.label), "คะแนนเฉลี่ยรวม"];
@@ -380,13 +473,90 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>รายงาน</h1>
-      <p className="text-sm text-gray-500 mb-6">วิเคราะห์และดาวน์โหลดข้อมูลการฝึกงาน</p>
+      <p className="text-sm text-gray-500 mb-5">วิเคราะห์และดาวน์โหลดข้อมูลการฝึกงาน</p>
 
-      {/* Analytics table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6 overflow-x-auto">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+      {/* ── Summary stat cards ── */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "บันทึกทั้งหมด", value: totalReports, sub: `ประเมินแล้ว ${scoredReports}`, icon: "📋", color: "#003E8E" },
+          { label: "คะแนนเฉลี่ยรวม", value: globalAvg != null ? globalAvg.toFixed(2) : "—", sub: "จากทุกรายการ", icon: "⭐", color: "#059669" },
+          { label: "นักศึกษาฝึกงาน", value: students.length, sub: `${allEvals.length} การประเมิน`, icon: "👤", color: "#7C3AED" },
+        ].map(({ label, value, sub, icon, color }) => (
+          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-1">
+            <span className="text-lg">{icon}</span>
+            <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+            <div className="text-xs font-medium text-gray-600">{label}</div>
+            <div className="text-xs text-gray-400">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Radar chart cards per student ── */}
+      {studentStats.some(s => s.allEvals.length > 0) && (
+        <div className="mb-6">
+          <h2 className="text-base font-bold mb-3" style={{ color: "#003E8E" }}>ผลการประเมินรายบุคคล</h2>
+          <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))" }}>
+            {studentStats.filter(s => s.allEvals.length > 0).map(({ student: s, mine, criteria, overall }) => (
+              <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                {/* Student header */}
+                <div className="flex items-center gap-2 mb-3">
+                  {s.image ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={s.image} alt="" className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                      style={{ background: "#003E8E" }}>
+                      {(s.name ?? "?")[0]}
+                    </div>
+                  )}
+                  <div>
+                    <div className="font-semibold text-gray-800 text-sm leading-tight">{s.name}</div>
+                    <div className="text-xs text-gray-400">{s.nickname ? `(${s.nickname}) · ` : ""}{s.level ? LEVEL_LABEL[s.level] : ""}</div>
+                  </div>
+                  {overall != null && (
+                    <div className="ml-auto text-right">
+                      <div className="text-xl font-bold" style={{ color: "#003E8E" }}>{overall.toFixed(1)}</div>
+                      <div className="text-xs text-gray-400">/ 5.0</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Radar + scores side by side */}
+                <div className="flex items-center gap-3">
+                  <RadarChart scores={criteria} size={148} />
+                  <div className="flex-1 space-y-1.5">
+                    {SCORE_CRITERIA.map((c, i) => {
+                      const v = criteria[c.key] ?? null;
+                      const { bg, fg } = ScoreColor(v);
+                      return (
+                        <div key={c.key} className="flex items-center gap-1.5">
+                          <span className="text-xs text-gray-500 w-14 shrink-0 truncate">{CRITERIA_SHORT[i]}</span>
+                          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            {v != null && (
+                              <div className="h-full rounded-full transition-all"
+                                style={{ width: `${(v / 5) * 100}%`, background: fg }} />
+                            )}
+                          </div>
+                          <span className="text-xs font-bold w-6 text-right" style={{ color: fg }}>
+                            {v != null ? v.toFixed(1) : "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="text-xs text-gray-400 pt-1">{mine.length} บันทึก</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Comparison table ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 flex-wrap gap-2">
           <div>
-            <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ผลการประเมินรายหมวด</h2>
+            <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ตารางเปรียบเทียบรายหมวด</h2>
             <p className="text-xs text-gray-400">เฉลี่ยจากทุกรายงานและทุกพี่เลี้ยง · สเกล 1–5</p>
           </div>
           <button onClick={exportSummary}
@@ -395,53 +565,67 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
             ⬇ สรุปรายบุคคล (.csv)
           </button>
         </div>
-        <table className="w-full text-sm min-w-[640px]">
-          <thead>
-            <tr style={{ background: "#F4F6FB" }}>
-              <Th>ชื่อ</Th>
-              <Th>รายงาน</Th>
-              {SCORE_CRITERIA.map(c => <Th key={c.key}>{c.label}</Th>)}
-              <Th>เฉลี่ยรวม</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {studentStats.map(({ student: s, mine, criteria, overall }) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <Td>
-                  <div className="font-medium text-gray-800">{s.name}</div>
-                  {s.nickname && <div className="text-xs text-gray-400">({s.nickname})</div>}
-                </Td>
-                <Td className="text-center text-gray-500">{mine.length}</Td>
-                {SCORE_CRITERIA.map(c => {
-                  const v = criteria[c.key];
-                  const pct = v != null ? v / 5 : 0;
-                  const bg = v == null ? "#f3f4f6" : v >= 4 ? "#dcfce7" : v >= 3 ? "#fef9c3" : "#fee2e2";
-                  const fg = v == null ? "#9ca3af" : v >= 4 ? "#16a34a" : v >= 3 ? "#ca8a04" : "#dc2626";
-                  return (
-                    <Td key={c.key} className="text-center">
-                      {v != null ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: bg, color: fg }}>{v.toFixed(1)}</span>
-                          <div className="w-12 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct * 100}%`, background: fg }} />
-                          </div>
-                        </div>
-                      ) : <span className="text-gray-300 text-xs">—</span>}
-                    </Td>
-                  );
-                })}
-                <Td className="text-center">
-                  <span className="font-bold text-base" style={{ color: "#003E8E" }}>
-                    {overall != null ? overall.toFixed(2) : "—"}
-                  </span>
-                </Td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead>
+              <tr style={{ background: "#F8FAFF" }}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 w-40">นักศึกษาฝึกงาน</th>
+                <th className="px-3 py-3 text-center text-xs font-semibold text-gray-500">บันทึก</th>
+                {SCORE_CRITERIA.map((c, i) => (
+                  <th key={c.key} className="px-3 py-3 text-center text-xs font-semibold text-gray-500">{CRITERIA_SHORT[i]}</th>
+                ))}
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">เฉลี่ยรวม</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {studentStats.map(({ student: s, mine, criteria, overall }, rank) => {
+                const { bg: overallBg, fg: overallFg } = ScoreColor(overall);
+                return (
+                  <tr key={s.id} className="hover:bg-blue-50/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-300 w-4">#{rank + 1}</span>
+                        <div>
+                          <div className="font-semibold text-gray-800 text-sm">{s.name}</div>
+                          {s.nickname && <div className="text-xs text-gray-400">({s.nickname})</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-center text-gray-500 text-sm">{mine.length}</td>
+                    {SCORE_CRITERIA.map(c => {
+                      const v = criteria[c.key] ?? null;
+                      const { bg, fg } = ScoreColor(v);
+                      return (
+                        <td key={c.key} className="px-3 py-3 text-center">
+                          {v != null ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: bg, color: fg }}>
+                                {v.toFixed(1)}
+                              </span>
+                              <div className="w-10 h-1 rounded-full bg-gray-100 overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${(v / 5) * 100}%`, background: fg }} />
+                              </div>
+                            </div>
+                          ) : <span className="text-gray-200 text-xs">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3 text-center">
+                      {overall != null ? (
+                        <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ background: overallBg, color: overallFg }}>
+                          {overall.toFixed(2)}
+                        </span>
+                      ) : <span className="text-gray-200">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Export detail section */}
+      {/* ── Export ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>ดาวน์โหลดข้อมูลรายละเอียด</h2>
         <p className="text-xs text-gray-400 mb-4">ส่งออกเป็น Excel (.csv) พร้อมข้อมูลทุกบันทึก คะแนนแต่ละหมวด และข้อเสนอแนะ</p>
