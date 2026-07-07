@@ -33,12 +33,21 @@ export async function POST(req: NextRequest) {
     const report = await prisma.report.findUnique({ where: { id: reportId } });
     if (!report) return NextResponse.json({ error: "ไม่พบรายงาน" }, { status: 404 });
 
-    const evaluation = await prisma.evaluation.upsert({
-      where: { reportId_mentorId: { reportId, mentorId: session.user.id } },
-      update: { scores, comment: comment || null },
-      create: { reportId, mentorId: session.user.id, scores, comment: comment || null },
-      include: { mentor: { select: { id: true, name: true, nickname: true } } },
+    const mentorId = session.user.id;
+    const existing = await prisma.evaluation.findUnique({
+      where: { reportId_mentorId: { reportId, mentorId } },
     });
+
+    const evaluation = existing
+      ? await prisma.evaluation.update({
+          where: { reportId_mentorId: { reportId, mentorId } },
+          data: { scores, comment: comment || null },
+          include: { mentor: { select: { id: true, name: true, nickname: true } } },
+        })
+      : await prisma.evaluation.create({
+          data: { reportId, mentorId, scores, comment: comment || null },
+          include: { mentor: { select: { id: true, name: true, nickname: true } } },
+        });
 
     if (report.status === "PENDING") {
       await prisma.report.update({ where: { id: reportId }, data: { status: "SCORED" } });
