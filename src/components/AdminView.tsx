@@ -445,13 +445,19 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
 
   const submit = async () => {
     setBusy(true);
-    const res = await fetch("/api/evaluations", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportId: report.id, scores, comment }),
-    });
-    setBusy(false);
-    if (!res.ok) return alert((await res.json()).error ?? "ไม่สำเร็จ");
-    onDone(report.id, await res.json());
+    try {
+      const res = await fetch("/api/evaluations", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: report.id, scores, comment }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(data.error ?? `บันทึกไม่สำเร็จ (${res.status})`); return; }
+      onDone(report.id, data);
+    } catch (e) {
+      alert("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
