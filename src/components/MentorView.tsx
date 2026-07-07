@@ -14,7 +14,7 @@ type EvalRecord = {
 
 type Rep = {
   id: string; date: string; title: string; description: string;
-  location: string | null; tools: string[]; ppe: string[];
+  location: string | null; tools: string[] | null; ppe: string[] | null; images: string[];
   learned: string | null; solution: string | null; result: string | null;
   status: string;
   user: { name: string | null; nickname: string | null; image: string | null; level: string | null; school: string | null };
@@ -203,19 +203,32 @@ function EvalModal({ report, myExisting, onClose, onDone }: {
             {report.solution && <RD label="วิธีแก้ปัญหา" icon="🔧">{report.solution}</RD>}
             {report.result && <RD label="ผลลัพธ์และสิ่งที่ได้รับ" icon="✅">{report.result}</RD>}
 
-            {report.tools.length > 0 && (
+            {(report.tools ?? []).length > 0 && (
               <div className="px-4 py-3 bg-white">
                 <p className="text-xs font-semibold text-gray-500 mb-2">🔩 เครื่องมือ/อุปกรณ์ที่ใช้</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {report.tools.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{t}</span>)}
+                  {(report.tools ?? []).map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{t}</span>)}
                 </div>
               </div>
             )}
-            {report.ppe.length > 0 && (
+            {(report.ppe ?? []).length > 0 && (
               <div className="px-4 py-3 bg-white">
                 <p className="text-xs font-semibold text-gray-500 mb-2">🦺 อุปกรณ์ป้องกันที่ใช้</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {report.ppe.map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#FEF9C3", color: "#92400E" }}>{t}</span>)}
+                  {(report.ppe ?? []).map((t, i) => <span key={i} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#FEF9C3", color: "#92400E" }}>{t}</span>)}
+                </div>
+              </div>
+            )}
+            {report.images?.length > 0 && (
+              <div className="px-4 py-3 bg-white">
+                <p className="text-xs font-semibold text-gray-500 mb-2">📷 รูปภาพประกอบ</p>
+                <div className="flex flex-wrap gap-2">
+                  {report.images.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`รูป ${i + 1}`} className="h-24 w-auto rounded-lg object-cover border border-gray-200" />
+                    </a>
+                  ))}
                 </div>
               </div>
             )}
