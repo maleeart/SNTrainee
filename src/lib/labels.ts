@@ -2,7 +2,7 @@ export const ROLE_LABEL: Record<string, string> = {
   STUDENT: "นักศึกษา",
   MENTOR: "พี่เลี้ยง",
   ADMIN: "ผู้ดูแลระบบ",
-  EXECUTIVE: "ผู้บริหาร",
+  EXECUTIVE: "ผู้สังเกตการณ์",
 };
 
 export const LEVEL_LABEL: Record<string, string> = {

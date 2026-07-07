@@ -75,6 +75,7 @@ model User {
   emailVerified DateTime?
   image         String?
   role          Role      @default(STUDENT)
+  nickname      String?
   level         Level?
   school        String?
   advisor       String? // อาจารย์นิเทศ
