@@ -40,11 +40,12 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
   meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; reports: Rep[];
 }) {
   const [reports, setReports] = useState<Rep[]>(initial);
-  const [tab, setTab] = useState<"pending" | "all">("pending");
+  const [tab, setTab] = useState<"pending" | "done" | "all">("pending");
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
 
   const pending = reports.filter(r => r.evaluations.every(e => e.mentorId !== meId));
-  const list = tab === "pending" ? pending : reports;
+  const done = reports.filter(r => r.evaluations.some(e => e.mentorId === meId));
+  const list = tab === "pending" ? pending : tab === "done" ? done : reports;
   const pendingCount = pending.filter(r => r.status === "PENDING").length;
 
   const onEvalDone = (reportId: string, ev: EvalRecord) => {
@@ -71,6 +72,7 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
           <Tab active={tab === "pending"} onClick={() => setTab("pending")}>
             ยังไม่ประเมิน {pendingCount > 0 && <span className="ml-1 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
           </Tab>
+          <Tab active={tab === "done"} onClick={() => setTab("done")}>ประเมินแล้ว ({done.length})</Tab>
           <Tab active={tab === "all"} onClick={() => setTab("all")}>ทั้งหมด ({reports.length})</Tab>
         </div>
 
