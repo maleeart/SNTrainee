@@ -16,8 +16,8 @@ type Rep = {
   user: { name: string | null; image: string | null; level: string | null; school: string | null };
 };
 
-export default function MentorView({ meId, meName, meImage, reports: initial }: {
-  meId: string; meName: string; meImage?: string | null; reports: Rep[];
+export default function MentorView({ meId, meName, meNickname, meEmail, meImage, reports: initial }: {
+  meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; reports: Rep[];
 }) {
   const [reports, setReports] = useState<Rep[]>(initial);
   const [tab, setTab] = useState<"mine" | "all">("mine");
@@ -43,7 +43,7 @@ export default function MentorView({ meId, meName, meImage, reports: initial }: 
 
   return (
     <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
-      <AppNav name={meName} image={meImage} role="MENTOR" />
+      <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role="MENTOR" profileHref="/profile" />
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษา</h1>

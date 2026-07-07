@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "next-auth/react";
 import Image from "next/image";
+import AppNav from "./AppNav";
 import {
   ROLE_LABEL, LEVEL_LABEL, JOB_TYPE_LABEL, SYSTEM_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
 } from "@/lib/labels";
 
-type U = { id: string; name: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null };
+type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
   jobType: string | null; systemCategory: string | null; status: string;
@@ -19,14 +19,15 @@ type Rep = {
 
 type Tab = "overview" | "reports" | "users";
 
-export default function AdminView({ readOnly, meId, meName, meImage, users: initUsers, reports: initReports }: {
-  readOnly: boolean; meId: string; meName: string; meImage?: string | null; users: U[]; reports: Rep[];
+export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports }: {
+  readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[];
 }) {
   const [users, setUsers] = useState<U[]>(initUsers);
   const [reports, setReports] = useState<Rep[]>(initReports);
   const [tab, setTab] = useState<Tab>("overview");
   const [sideOpen, setSideOpen] = useState(false);
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
+  const [detailUser, setDetailUser] = useState<U | null>(null);
 
   // admin + mentor can both be assigned as mentor
   const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
@@ -74,37 +75,15 @@ export default function AdminView({ readOnly, meId, meName, meImage, users: init
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F4F6FB" }}>
-      {/* Top navbar */}
-      <nav style={{ background: "#003E8E" }} className="shadow-lg flex-shrink-0">
-        <div className="px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            {/* Hamburger (mobile) */}
-            <button className="md:hidden mr-1 text-white/70 hover:text-white" onClick={() => setSideOpen(o => !o)}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-            </button>
-            <div style={{ borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-              <Image src="/logi.png" alt="กบห-ธ." width={36} height={36} style={{ objectFit: "cover", display: "block" }} />
-            </div>
-            <div className="leading-tight">
-              <span className="font-black italic text-white text-base" style={{ fontFamily: "'Arial Black', sans-serif" }}>กบห-ธ.</span>
-              <span className="hidden sm:inline text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>กฟผ. สนง.ไทรน้อย</span>
-            </div>
-            <span className="hidden sm:inline text-xs px-2 py-0.5 rounded-full font-medium"
-              style={{ background: "rgba(255,192,0,0.18)", color: "#FFC000", border: "1px solid rgba(255,192,0,0.3)" }}>
-              {readOnly ? "ผู้บริหาร" : "ผู้ดูแลระบบ"}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            {meImage && <img src={meImage} className="w-7 h-7 rounded-full ring-1 ring-white/20" alt="" />}
-            <span className="text-sm hidden md:block" style={{ color: "rgba(255,255,255,0.8)" }}>{meName}</span>
-            <button onClick={() => signOut({ callbackUrl: "/" })}
-              className="text-xs px-2.5 py-1.5 rounded-lg"
-              style={{ color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.07)" }}>
-              ออกจากระบบ
-            </button>
-          </div>
-        </div>
-      </nav>
+      {/* Hamburger row (mobile only) */}
+      <div style={{ background: "#003E8E" }} className="md:hidden flex items-center px-3 h-10 relative z-10">
+        <button className="text-white/70 hover:text-white p-1" onClick={() => setSideOpen(o => !o)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+      <div className="flex-shrink-0">
+        <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar overlay (mobile) */}
@@ -143,10 +122,11 @@ export default function AdminView({ readOnly, meId, meName, meImage, users: init
         <main className="flex-1 overflow-auto p-6">
           {tab === "overview" && <OverviewTab reports={reports} students={students} mentors={mentors} />}
           {tab === "reports" && <ReportsTab reports={reports} mentors={mentors} readOnly={readOnly} meId={meId} onAssign={assign} onEval={setEvalTarget} />}
-          {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} />}
+          {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
         </main>
       </div>
       {evalTarget && <EvalModal report={evalTarget} onClose={() => setEvalTarget(null)} onDone={onEvalDone} />}
+      {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
     </div>
   );
 }
@@ -260,29 +240,30 @@ function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { re
   );
 }
 
-function UsersTab({ users, readOnly, onSetRole }: { users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void }) {
+function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void }) {
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ผู้ใช้งาน</h1>
-      <p className="text-sm text-gray-500 mb-6">จัดการสิทธิ์การเข้าถึง</p>
+      <p className="text-sm text-gray-500 mb-6">คลิกชื่อเพื่อดูรายละเอียด</p>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>ชื่อ</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th></tr>
+            <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th><Th>สถานะ</Th></tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {users.map(u => (
-              <tr key={u.id} className="hover:bg-gray-50">
+              <tr key={u.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => onDetail(u)}>
                 <Td>
                   <div className="flex items-center gap-2">
-                    {u.image && <img src={u.image} className="w-6 h-6 rounded-full" alt="" />}
-                    <span className="font-medium text-gray-800">{u.name}</span>
+                    {u.image ? <img src={u.image} className="w-6 h-6 rounded-full" alt="" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">{u.name?.[0]}</div>}
+                    <span className="font-medium text-gray-800 hover:underline">{u.name}</span>
                   </div>
                 </Td>
-                <Td className="text-gray-500">{u.email}</Td>
+                <Td className="text-gray-500">{u.nickname ?? <span className="text-gray-300">—</span>}</Td>
+                <Td className="text-gray-500 text-xs">{u.email}</Td>
                 <Td>{u.level ? LEVEL_LABEL[u.level] : <span className="text-gray-300">—</span>}</Td>
                 <Td>{u.school ?? <span className="text-gray-300">—</span>}</Td>
-                <Td>
+                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                   {readOnly
                     ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{ROLE_LABEL[u.role]}</span>
                     : (
@@ -291,12 +272,73 @@ function UsersTab({ users, readOnly, onSetRole }: { users: U[]; readOnly: boolea
                         {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     )}
+                </td>
+                <Td>
+                  {u.profileDone
+                    ? <span className="text-xs text-green-600">✓ ครบ</span>
+                    : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
                 </Td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[]; onClose: () => void }) {
+  const mine = reports.filter(r => r.user.name === u.name);
+  const approved = mine.filter(r => r.status === "APPROVED");
+  const avgScore = approved.length
+    ? (approved.reduce((s, r) => { const v = Object.values(r.scores ?? {}); return s + (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0); }, 0) / approved.length).toFixed(1)
+    : "-";
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4" style={{ background: "linear-gradient(135deg, #003E8E, #002d7a)" }}>
+          <div className="flex items-center gap-4">
+            {u.image ? <img src={u.image} className="w-16 h-16 rounded-full ring-2 ring-white/30" alt="" />
+              : <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-white text-2xl font-bold">{u.name?.[0]}</div>}
+            <div>
+              <p className="text-white font-bold text-lg">{u.name}</p>
+              {u.nickname && <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>"{u.nickname}"</p>}
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block" style={{ background: "rgba(255,192,0,0.25)", color: "#FFC000" }}>{ROLE_LABEL[u.role]}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-3 text-sm">
+          <DR label="อีเมล" value={u.email} />
+          {u.level && <DR label="ระดับ" value={LEVEL_LABEL[u.level]} />}
+          {u.school && <DR label="สถานศึกษา" value={u.school} />}
+          {u.advisor && <DR label="อ.นิเทศ" value={u.advisor} />}
+          {u.startDate && <DR label="เริ่มฝึก" value={new Date(u.startDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
+          {u.endDate && <DR label="สิ้นสุด" value={new Date(u.endDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
+
+          <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: "1px solid #f3f4f6" }}>
+            <StatCard label="รายงาน" value={mine.length} />
+            <StatCard label="อนุมัติ" value={approved.length} />
+            <StatCard label="คะแนนเฉลี่ย" value={avgScore} />
+          </div>
+        </div>
+
+        <div className="px-6 pb-6">
+          <button onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ปิด</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DR({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div className="flex gap-2">
+      <span className="text-gray-400 w-24 shrink-0">{label}</span>
+      <span className="text-gray-800 font-medium">{value}</span>
     </div>
   );
 }

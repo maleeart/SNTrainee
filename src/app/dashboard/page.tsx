@@ -1,16 +1,22 @@
-import { requireUser } from "@/lib/guards";
+import { requireUser, isProfileComplete } from "@/lib/guards";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Dashboard from "@/components/Dashboard";
 
 export default async function DashboardPage() {
   const u = await requireUser(["STUDENT"]);
-  if (!u.profileDone) redirect("/profile");
+
+  const me = await prisma.user.findUnique({
+    where: { id: u.id },
+    select: { name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true },
+  });
+
+  if (!me || !me.profileDone || !isProfileComplete(me)) redirect("/profile");
 
   const reports = await prisma.report.findMany({
     where: { userId: u.id },
     orderBy: { date: "desc" },
   });
 
-  return <Dashboard user={u} initialReports={reports} />;
+  return <Dashboard user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }} initialReports={reports} />;
 }

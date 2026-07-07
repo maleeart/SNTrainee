@@ -8,7 +8,7 @@ import {
 } from "@/lib/labels";
 import AppNav from "./AppNav";
 
-type User = { id?: string; name?: string | null; image?: string | null; role?: string };
+type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
 type Scores = Record<string, number>;
 type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null };
 
@@ -115,7 +115,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
 
   return (
     <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
-      <AppNav name={user.name} image={user.image} role={user.role ?? "STUDENT"} profileHref="/profile" />
+      <AppNav name={user.name} nickname={user.nickname} email={user.email} image={user.image} role={user.role ?? "STUDENT"} level={user.level} school={user.school} advisor={user.advisor} startDate={user.startDate} endDate={user.endDate} profileHref="/profile" />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
