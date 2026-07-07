@@ -2,11 +2,12 @@
 
 import { useState, useRef } from "react";
 import type { Report } from "@prisma/client";
-import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
+import { STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
 type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number } };
+type MyStats = { totalReports: number; scoredReports: number; criteria: Record<string, number>; overall: number | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
@@ -32,8 +33,9 @@ async function compressImage(file: File): Promise<Blob> {
   });
 }
 
-export default function Dashboard({ user, initialReports }: { user: User; initialReports: ReportEx[] }) {
+export default function Dashboard({ user, initialReports, myStats }: { user: User; initialReports: ReportEx[]; myStats: MyStats }) {
   const [reports, setReports] = useState<ReportEx[]>(initialReports);
+  const [tab, setTab] = useState<"logs" | "report">("logs");
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
   const [ppeInput, setPpeInput] = useState("");
@@ -106,7 +108,21 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
       <AppNav name={user.name} nickname={user.nickname} email={user.email} image={user.image} role={user.role ?? "STUDENT"} level={user.level} school={user.school} advisor={user.advisor} startDate={user.startDate} endDate={user.endDate} profileHref="/profile" />
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        {/* Tab bar */}
+        <div className="flex gap-1 bg-white rounded-xl shadow-sm border border-gray-100 p-1 mb-6 w-fit">
+          {([["logs", "บันทึกการฝึกงาน"], ["report", "รายงาน"]] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className="px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={tab === id ? { background: "#003E8E", color: "#fff" } : { color: "#6B7280" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "report" && <StudentReportTab stats={myStats} />}
+
+        {tab === "logs" && <>
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">บันทึกการฝึกงาน</h1>
@@ -179,6 +195,7 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
             ))}
           </div>
         )}
+        </>}
       </main>
 
       {editing && (
@@ -275,6 +292,96 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
         .input { width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; outline: none; }
         .input:focus { border-color: #003E8E; box-shadow: 0 0 0 2px rgba(0,62,142,0.15); }
       `}</style>
+    </div>
+  );
+}
+
+const CRITERIA_SHORT = ["ทักษะ", "ปลอดภัย", "รับผิดชอบ", "คุณภาพ", "รายงาน"];
+
+function RadarChartStudent({ scores, size = 180 }: { scores: Record<string, number>; size?: number }) {
+  const cx = size / 2, cy = size / 2, r = size * 0.34, n = SCORE_CRITERIA.length;
+  const angle = (i: number) => Math.PI * (-0.5 + (2 * i) / n);
+  const pt = (i: number, val: number) => { const a = angle(i); const rr = r * Math.max(0, val) / 5; return [cx + rr * Math.cos(a), cy + rr * Math.sin(a)]; };
+  const outerPt = (i: number, scale = 1) => { const a = angle(i); return [cx + r * scale * Math.cos(a), cy + r * scale * Math.sin(a)]; };
+  const levelPts = (lv: number) => SCORE_CRITERIA.map((_, i) => outerPt(i, lv / 5).join(",")).join(" ");
+  const dataPts = SCORE_CRITERIA.map((c, i) => pt(i, scores[c.key] ?? 0).join(",")).join(" ");
+  const hasData = SCORE_CRITERIA.some(c => (scores[c.key] ?? 0) > 0);
+  const labelR = r + 18;
+  const anchor = (i: number) => i === 0 ? "middle" : i === 1 || i === 2 ? "start" : "end";
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+      {[1,2,3,4,5].map(lv => <polygon key={lv} points={levelPts(lv)} fill={lv===5?"#EEF2FF":"none"} stroke="#E2E8F0" strokeWidth="0.7"/>)}
+      {SCORE_CRITERIA.map((_, i) => { const [ox,oy]=outerPt(i); return <line key={i} x1={cx} y1={cy} x2={ox} y2={oy} stroke="#CBD5E1" strokeWidth="0.7"/>; })}
+      {hasData && <polygon points={dataPts} fill="rgba(0,62,142,0.18)" stroke="#003E8E" strokeWidth="2" strokeLinejoin="round"/>}
+      {hasData && SCORE_CRITERIA.map((c,i) => { const [px,py]=pt(i,scores[c.key]??0); return <circle key={i} cx={px} cy={py} r="3" fill="#003E8E"/>; })}
+      {SCORE_CRITERIA.map((_,i) => { const a=angle(i); const lx=cx+labelR*Math.cos(a), ly=cy+labelR*Math.sin(a); return <text key={i} x={lx} y={ly} textAnchor={anchor(i)} dominantBaseline="middle" fontSize="10" fill="#64748B" fontWeight="500">{CRITERIA_SHORT[i]}</text>; })}
+      {hasData && <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize="12" fill="#003E8E" fontWeight="700">{(SCORE_CRITERIA.reduce((s,c)=>s+(scores[c.key]??0),0)/n).toFixed(1)}</text>}
+    </svg>
+  );
+}
+
+function StudentReportTab({ stats }: { stats: MyStats }) {
+  const hasEval = stats.overall != null;
+  const scoreColor = (v: number) => v >= 4 ? "#16A34A" : v >= 3 ? "#A16207" : "#DC2626";
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานผลการฝึกงาน</h1>
+      <p className="text-gray-500 text-sm mb-6">ภาพรวมผลการประเมินของฉัน</p>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "บันทึกทั้งหมด", value: stats.totalReports, icon: "📋", color: "#003E8E" },
+          { label: "ประเมินแล้ว", value: stats.scoredReports, icon: "✅", color: "#059669" },
+          { label: "รอประเมิน", value: stats.totalReports - stats.scoredReports, icon: "⏳", color: "#D97706" },
+        ].map(({ label, value, icon, color }) => (
+          <div key={label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <span className="text-xl">{icon}</span>
+            <div className="text-2xl font-bold mt-1" style={{ color }}>{value}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {!hasEval ? (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400">
+          <div className="text-4xl mb-3">📊</div>
+          <p className="text-sm">ยังไม่มีผลการประเมิน<br/>เมื่อพี่เลี้ยงประเมินแล้วจะแสดงผลที่นี่</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ผลการประเมินรายหมวด</h2>
+            <div className="text-right">
+              <div className="text-3xl font-bold" style={{ color: "#003E8E" }}>{stats.overall!.toFixed(2)}</div>
+              <div className="text-xs text-gray-400">คะแนนเฉลี่ยรวม / 5.00</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <RadarChartStudent scores={stats.criteria} size={180} />
+            <div className="flex-1 w-full space-y-3">
+              {SCORE_CRITERIA.map((c, i) => {
+                const v = stats.criteria[c.key] ?? null;
+                const color = v != null ? scoreColor(v) : "#9CA3AF";
+                return (
+                  <div key={c.key}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">{CRITERIA_SHORT[i]} <span className="text-xs text-gray-400">({c.label})</span></span>
+                      <span className="font-bold" style={{ color }}>{v != null ? v.toFixed(2) : "—"}</span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                      {v != null && <div className="h-full rounded-full transition-all" style={{ width: `${(v/5)*100}%`, background: color }} />}
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-xs text-gray-400 pt-1">สเกล 1–5 · เฉลี่ยจากทุกรายการที่ประเมินแล้ว</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

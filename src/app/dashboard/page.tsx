@@ -26,5 +26,24 @@ export default async function DashboardPage() {
     return { ...rest, evalSummary };
   });
 
-  return <Dashboard user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }} initialReports={JSON.parse(JSON.stringify(reports))} />;
+  // Aggregate scores for รายงาน tab
+  const allEvalScores = rawReports.flatMap(r =>
+    (r.evaluations as { scores: Record<string, number> }[])
+  );
+  const criteriaKeys = ["skill", "safety", "responsibility", "quality", "report"];
+  const myCriteria: Record<string, number> = {};
+  if (allEvalScores.length > 0) {
+    for (const key of criteriaKeys) {
+      const vals = allEvalScores.map(e => e.scores[key] ?? 0).filter(v => v > 0);
+      if (vals.length) myCriteria[key] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+  }
+  const allNums = allEvalScores.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
+  const myOverall = allNums.length ? allNums.reduce((a, b) => a + b, 0) / allNums.length : null;
+
+  return <Dashboard
+    user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }}
+    initialReports={JSON.parse(JSON.stringify(reports))}
+    myStats={{ totalReports: reports.length, scoredReports: reports.filter(r => r.status === "SCORED").length, criteria: myCriteria, overall: myOverall }}
+  />;
 }
