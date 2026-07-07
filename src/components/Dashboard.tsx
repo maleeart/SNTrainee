@@ -123,11 +123,23 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
             <h1 className="text-2xl font-bold text-gray-800">บันทึกการฝึกงาน</h1>
             <p className="text-gray-500 text-sm mt-0.5">งานช่างไฟฟ้า อาคารและบริเวณ</p>
           </div>
-          <button onClick={() => { setEditing(blank()); setToolInput(""); }}
-            className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
-            style={{ background: "#003E8E" }}>
-            <span className="text-lg leading-none">+</span> บันทึกวันใหม่
-          </button>
+          {(() => {
+            const todayApproved = reports.find(r => iso(r.date) === today && r.status === "APPROVED");
+            return todayApproved ? (
+              <div className="text-right">
+                <button disabled className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm opacity-40 cursor-not-allowed" style={{ background: "#003E8E" }}>
+                  <span className="text-lg leading-none">+</span> บันทึกวันใหม่
+                </button>
+                <p className="text-xs text-green-600 mt-1">✓ วันนี้อนุมัติแล้ว</p>
+              </div>
+            ) : (
+              <button onClick={() => { setEditing(blank()); setToolInput(""); setPpeInput(""); }}
+                className="flex items-center gap-2 text-white px-4 py-2 rounded-xl font-medium text-sm shadow transition-opacity hover:opacity-90"
+                style={{ background: "#003E8E" }}>
+                <span className="text-lg leading-none">+</span> บันทึกวันใหม่
+              </button>
+            );
+          })()}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
