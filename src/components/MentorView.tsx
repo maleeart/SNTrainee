@@ -2,42 +2,61 @@
 
 import { useState } from "react";
 import AppNav from "./AppNav";
-import {
-  STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA,
-} from "@/lib/labels";
+import { STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA } from "@/lib/labels";
+
+type EvalRecord = {
+  id: string;
+  mentorId: string;
+  scores: Record<string, number>;
+  comment: string | null;
+  mentor: { id: string; name: string | null; nickname: string | null };
+};
 
 type Rep = {
   id: string; date: string; title: string; description: string;
-  jobType: string | null; systemCategory: string | null; location: string | null;
-  tools: string[]; ppe: string[]; learned: string | null; solution: string | null; result: string | null;
-  status: string; assignedMentorId: string | null; mentorComment: string | null;
-  scores: Record<string, number> | null;
+  location: string | null; tools: string[]; ppe: string[];
+  learned: string | null; solution: string | null; result: string | null;
+  status: string;
   user: { name: string | null; image: string | null; level: string | null; school: string | null };
+  evaluations: EvalRecord[];
 };
+
+function avgScores(evals: EvalRecord[]): Record<string, number> {
+  if (!evals.length) return {};
+  const result: Record<string, number> = {};
+  for (const c of SCORE_CRITERIA) {
+    result[c.key] = evals.reduce((s, e) => s + (e.scores[c.key] ?? 0), 0) / evals.length;
+  }
+  return result;
+}
+
+function overallAvg(evals: EvalRecord[]): string {
+  if (!evals.length) return "-";
+  const all = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
+  return (all.reduce((a, b) => a + b, 0) / all.length).toFixed(1);
+}
 
 export default function MentorView({ meId, meName, meNickname, meEmail, meImage, reports: initial }: {
   meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; reports: Rep[];
 }) {
   const [reports, setReports] = useState<Rep[]>(initial);
-  const [tab, setTab] = useState<"mine" | "all">("mine");
+  const [tab, setTab] = useState<"pending" | "all">("pending");
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
 
-  const mine = reports.filter(r => r.assignedMentorId === meId);
-  const list = tab === "mine" ? mine : reports;
-  const pending = mine.filter(r => r.status === "PENDING_APPROVAL").length;
+  const pending = reports.filter(r => r.evaluations.every(e => e.mentorId !== meId));
+  const list = tab === "pending" ? pending : reports;
+  const pendingCount = pending.filter(r => r.status === "PENDING").length;
 
-  const onDone = (updated: Rep) => {
-    setReports(prev => prev.map(r => (r.id === updated.id ? { ...r, ...updated } : r)));
+  const onEvalDone = (reportId: string, ev: EvalRecord) => {
+    setReports(prev => prev.map(r => {
+      if (r.id !== reportId) return r;
+      const existing = r.evaluations.findIndex(e => e.mentorId === meId);
+      const evals = existing >= 0
+        ? r.evaluations.map((e, i) => i === existing ? ev : e)
+        : [...r.evaluations, ev];
+      return { ...r, evaluations: evals, status: "SCORED" };
+    }));
     setEvalTarget(null);
-  };
-
-  const selfAssign = async (reportId: string) => {
-    const res = await fetch("/api/admin", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ op: "assign", reportId, mentorId: meId }),
-    });
-    if (res.ok) setReports(prev => prev.map(r => r.id === reportId ? { ...r, assignedMentorId: meId, status: "PENDING_APPROVAL" } : r));
-    else alert("รับงานไม่สำเร็จ");
   };
 
   return (
@@ -46,11 +65,13 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษา</h1>
-        <p className="text-gray-500 text-sm mb-6">อนุมัติและประเมินงานที่ได้รับมอบหมาย</p>
+        <p className="text-gray-500 text-sm mb-6">ประเมินให้คะแนนได้ทุกรายงาน — คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
 
         <div className="flex gap-2 mb-6">
-          <Tab active={tab === "mine"} onClick={() => setTab("mine")}>งานของฉัน {pending > 0 && <span className="ml-1 bg-amber-500 text-white text-xs px-1.5 rounded-full">{pending}</span>}</Tab>
-          <Tab active={tab === "all"} onClick={() => setTab("all")}>ทั้งหมด</Tab>
+          <Tab active={tab === "pending"} onClick={() => setTab("pending")}>
+            ยังไม่ประเมิน {pendingCount > 0 && <span className="ml-1 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
+          </Tab>
+          <Tab active={tab === "all"} onClick={() => setTab("all")}>ทั้งหมด ({reports.length})</Tab>
         </div>
 
         {list.length === 0 ? (
@@ -58,7 +79,8 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
         ) : (
           <div className="space-y-3">
             {list.map(r => {
-              const canAct = r.assignedMentorId === meId;
+              const myEval = r.evaluations.find(e => e.mentorId === meId);
+              const avg = avgScores(r.evaluations);
               return (
                 <div key={r.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -66,6 +88,11 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{fmt(r.date)}</span>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                        {r.evaluations.length > 0 && (
+                          <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                            👥 {r.evaluations.length} พี่เลี้ยงประเมิน · เฉลี่ย {overallAvg(r.evaluations)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-700">
                         {r.user.image && <img src={r.user.image} className="w-5 h-5 rounded-full" alt="" />}
@@ -74,33 +101,35 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       </div>
                       <h3 className="font-semibold text-gray-800 mt-1">{r.title}</h3>
                       {r.location && <p className="text-xs text-gray-400">📍 {r.location}</p>}
-                      <p className="text-gray-500 text-sm mt-1">{r.description}</p>
-                      {r.tools.length > 0 && <p className="text-xs text-gray-400 mt-1">🔧 {r.tools.join(", ")}</p>}
-                      {r.ppe.length > 0 && <p className="text-xs text-green-600 mt-1">🦺 อุปกรณ์ป้องกัน: {r.ppe.join(", ")}</p>}
+                      <p className="text-gray-500 text-sm mt-1 line-clamp-2">{r.description}</p>
                       {r.learned && <p className="text-xs text-gray-500 mt-1"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
                       {r.solution && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
-                      {r.result && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">ผลลัพธ์:</span> {r.result}</p>}
-                      {r.mentorComment && (
-                        <div className="mt-2 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">
-                          <span className="font-medium">ความเห็น:</span> {r.mentorComment}
-                        </div>
-                      )}
-                      {r.scores && (
+
+                      {/* Average scores from all mentors */}
+                      {r.evaluations.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {SCORE_CRITERIA.map(c => (
-                            <span key={c.key} className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">{c.label}: {r.scores![c.key] ?? "-"}</span>
+                            <span key={c.key} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                              {c.label}: {avg[c.key]?.toFixed(1) ?? "-"}
+                            </span>
                           ))}
                         </div>
                       )}
-                    </div>
-                    <div className="flex flex-col gap-2 shrink-0">
-                      {!r.assignedMentorId && (
-                        <button onClick={() => selfAssign(r.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: "#003E8E" }}>รับงาน</button>
+
+                      {/* My eval badge */}
+                      {myEval && (
+                        <div className="mt-2 text-xs bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 text-green-700">
+                          ✓ คุณประเมินแล้ว {myEval.comment && `· "${myEval.comment}"`}
+                        </div>
                       )}
-                      {canAct && r.status !== "APPROVED" && (
-                        <button onClick={() => setEvalTarget(r)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: "#16a34a" }}>ตรวจงาน</button>
-                      )}
                     </div>
+
+                    <button
+                      onClick={() => setEvalTarget(r)}
+                      className="text-xs px-3 py-1.5 rounded-lg font-medium shrink-0 text-white"
+                      style={{ background: myEval ? "#6366f1" : "#003E8E" }}>
+                      {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
+                    </button>
                   </div>
                 </div>
               );
@@ -109,54 +138,85 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
         )}
       </main>
 
-      {evalTarget && <EvalModal report={evalTarget} onClose={() => setEvalTarget(null)} onDone={onDone} />}
+      {evalTarget && (
+        <EvalModal
+          report={evalTarget}
+          myExisting={evalTarget.evaluations.find(e => e.mentorId === meId) ?? null}
+          onClose={() => setEvalTarget(null)}
+          onDone={onEvalDone}
+        />
+      )}
     </div>
   );
 }
 
-function EvalModal({ report, onClose, onDone }: { report: Rep; onClose: () => void; onDone: (r: Rep) => void }) {
+function EvalModal({ report, myExisting, onClose, onDone }: {
+  report: Rep;
+  myExisting: EvalRecord | null;
+  onClose: () => void;
+  onDone: (reportId: string, ev: EvalRecord) => void;
+}) {
   const [scores, setScores] = useState<Record<string, number>>(
-    () => report.scores ?? Object.fromEntries(SCORE_CRITERIA.map(c => [c.key, 3]))
+    myExisting?.scores ?? Object.fromEntries(SCORE_CRITERIA.map(c => [c.key, 3]))
   );
-  const [comment, setComment] = useState(report.mentorComment ?? "");
+  const [comment, setComment] = useState(myExisting?.comment ?? "");
   const [busy, setBusy] = useState(false);
 
-  const submit = async (action: "approve" | "reject") => {
-    if (action === "reject" && !comment.trim()) return alert("กรุณาระบุเหตุผลที่ตีกลับ");
+  const submit = async () => {
     setBusy(true);
-    const res = await fetch(`/api/reports/${report.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, scores, comment }),
+    const res = await fetch("/api/evaluations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportId: report.id, scores, comment }),
     });
     setBusy(false);
     if (!res.ok) return alert((await res.json()).error ?? "ไม่สำเร็จ");
-    const updated = await res.json();
-    onDone({ ...report, ...updated });
+    const ev = await res.json();
+    onDone(report.id, ev);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-1">ตรวจงาน: {report.user.name}</h2>
-        <p className="text-sm text-gray-500 mb-4">{report.title}</p>
+        <h2 className="text-lg font-bold text-gray-800 mb-0.5">ประเมินงาน</h2>
+        <p className="text-sm text-gray-500 mb-1">{report.user.name} · {report.title}</p>
+        <p className="text-xs text-gray-400 mb-4">{fmt(report.date)}</p>
 
-        <p className="text-sm font-medium text-gray-700 mb-2">ให้คะแนน (1–5)</p>
-        <div className="space-y-3 mb-4">
+        <p className="text-sm font-medium text-gray-700 mb-3">คะแนนแต่ละหมวด (1–5)</p>
+        <div className="space-y-4 mb-4">
           {SCORE_CRITERIA.map(c => (
             <div key={c.key}>
-              <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">{c.label}</span><span className="font-medium text-blue-700">{scores[c.key]}</span></div>
-              <input type="range" min={1} max={5} value={scores[c.key]} onChange={e => setScores({ ...scores, [c.key]: +e.target.value })} className="w-full accent-blue-700" />
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-gray-600">{c.label}</span>
+                <span className="font-bold text-lg" style={{ color: "#003E8E" }}>{scores[c.key]}</span>
+              </div>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(v => (
+                  <button key={v} onClick={() => setScores({ ...scores, [c.key]: v })}
+                    className="flex-1 py-1.5 rounded-lg text-sm font-medium transition-all"
+                    style={scores[c.key] === v
+                      ? { background: "#003E8E", color: "#fff" }
+                      : { background: "#F4F6FB", color: "#6b7280" }}>
+                    {v}
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
         </div>
 
-        <label className="block text-sm font-medium text-gray-700 mb-1">ความเห็น</label>
-        <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 resize-none mb-4" placeholder="ข้อเสนอแนะ / เหตุผลที่ตีกลับ" />
+        <label className="block text-sm font-medium text-gray-700 mb-1">ความเห็น / ข้อเสนอแนะ</label>
+        <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 resize-none mb-5"
+          placeholder="ข้อเสนอแนะสำหรับนักศึกษา..." />
 
         <div className="flex gap-3">
-          <button disabled={busy} onClick={() => submit("approve")} className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium">อนุมัติ</button>
-          <button disabled={busy} onClick={() => submit("reject")} className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium">ตีกลับ</button>
-          <button disabled={busy} onClick={onClose} className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
+          <button disabled={busy} onClick={submit}
+            className="flex-1 text-white py-2.5 rounded-xl font-medium disabled:opacity-50"
+            style={{ background: "#003E8E" }}>
+            {busy ? "กำลังบันทึก..." : myExisting ? "อัปเดตคะแนน" : "บันทึกคะแนน"}
+          </button>
+          <button disabled={busy} onClick={onClose}
+            className="px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
         </div>
       </div>
     </div>
@@ -165,7 +225,10 @@ function EvalModal({ report, onClose, onDone }: { report: Rep; onClose: () => vo
 
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`px-4 py-2 rounded-lg text-sm font-medium ${active ? "bg-blue-700 text-white" : "bg-white text-gray-600 border border-gray-200"}`}>{children}</button>
+    <button onClick={onClick} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center ${active ? "text-white" : "bg-white text-gray-600 border border-gray-200"}`}
+      style={active ? { background: "#003E8E" } : {}}>
+      {children}
+    </button>
   );
 }
 

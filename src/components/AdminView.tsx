@@ -1,23 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import AppNav from "./AppNav";
-import {
-  ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
-} from "@/lib/labels";
+import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
 
+type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
-  jobType: string | null; systemCategory: string | null; status: string; result: string | null;
-  assignedMentorId: string | null; scores: Record<string, number> | null;
-  mentorComment: string | null;
-  user: { name: string | null; level: string | null; school: string | null };
-  assignedMentor: { name: string | null } | null;
+  status: string; result: string | null;
+  user: { id: string; name: string | null; level: string | null; school: string | null };
+  evaluations: EvalRecord[];
 };
 
 type Tab = "overview" | "reports" | "users";
+
+function overallAvg(evals: EvalRecord[]): number | null {
+  if (!evals.length) return null;
+  const all = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
+  return all.length ? all.reduce((a, b) => a + b, 0) / all.length : null;
+}
 
 export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports }: {
   readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[];
@@ -26,13 +28,11 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   const [reports, setReports] = useState<Rep[]>(initReports);
   const [tab, setTab] = useState<Tab>("overview");
   const [sideOpen, setSideOpen] = useState(false);
-  const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
   const [detailUser, setDetailUser] = useState<U | null>(null);
 
-  // admin + mentor can both be assigned as mentor
-  const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
   const students = users.filter(u => u.role === "STUDENT");
-  const pending = reports.filter(r => r.status === "PENDING_ASSIGN").length;
+  const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
+  const pending = reports.filter(r => r.status === "PENDING").length;
 
   const setRole = async (userId: string, role: string) => {
     const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "role", userId, role }) });
@@ -40,26 +40,11 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
   };
 
-  const onEvalDone = (updated: Rep) => {
-    setReports(prev => prev.map(r => (r.id === updated.id ? { ...r, ...updated } : r)));
-    setEvalTarget(null);
-  };
-
-  const assign = async (reportId: string, mentorId: string) => {
-    const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "assign", reportId, mentorId }) });
-    if (res.ok) {
-      const mName = mentors.find(m => m.id === mentorId)?.name ?? null;
-      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, assignedMentorId: mentorId || null, assignedMentor: mentorId ? { name: mName } : null, status: mentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN" } : r)));
-    } else alert("มอบหมายไม่สำเร็จ");
-  };
-
   const exportCsv = () => {
-    const head = ["วันที่", "นักศึกษา", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "พี่เลี้ยง", "สถานะ", ...SCORE_CRITERIA.map(c => c.label), "เฉลี่ย"];
+    const head = ["วันที่", "นักศึกษา", "ระดับ", "สถานศึกษา", "สถานที่", "หัวข้อ", "สถานะ", "จำนวนผู้ประเมิน", "คะแนนเฉลี่ย"];
     const rows = reports.map(r => {
-      const sc = r.scores;
-      const vals = SCORE_CRITERIA.map(c => (sc ? sc[c.key] ?? "" : ""));
-      const avg = sc ? (Object.values(sc).reduce((a, b) => a + b, 0) / Object.values(sc).length).toFixed(2) : "";
-      return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.location ?? "", r.title, r.assignedMentor?.name ?? "", STATUS_LABEL[r.status], ...vals, avg];
+      const avg = overallAvg(r.evaluations);
+      return [r.date.slice(0, 10), r.user.name ?? "", r.user.level ? LEVEL_LABEL[r.user.level] : "", r.user.school ?? "", r.location ?? "", r.title, STATUS_LABEL[r.status] ?? r.status, r.evaluations.length, avg != null ? avg.toFixed(2) : ""];
     });
     const csv = [head, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -75,7 +60,6 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F4F6FB" }}>
-      {/* Hamburger row (mobile only) */}
       <div style={{ background: "#003E8E" }} className="md:hidden flex items-center px-3 h-10 relative z-10">
         <button className="text-white/70 hover:text-white p-1" onClick={() => setSideOpen(o => !o)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -86,92 +70,89 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar overlay (mobile) */}
         {sideOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSideOpen(false)} />}
-
-        {/* Sidebar */}
-        <aside className={`
-          fixed md:static inset-y-0 left-0 z-30 md:z-auto
-          w-56 flex-shrink-0 flex flex-col
-          transition-transform duration-200
-          ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
-        `} style={{ background: "#002d7a", top: 0, paddingTop: "3.5rem" }}>
+        <aside className={`fixed md:static inset-y-0 left-0 z-30 md:z-auto w-56 flex-shrink-0 flex flex-col transition-transform duration-200 ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+          style={{ background: "#002d7a", top: 0, paddingTop: "3.5rem" }}>
           <div className="flex flex-col flex-1 py-4 px-3">
             {NAV.map(n => (
               <button key={n.id} onClick={() => { setTab(n.id); setSideOpen(false); }}
                 className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-medium mb-1 transition-colors text-left"
-                style={tab === n.id
-                  ? { background: "#FFC000", color: "#002d7a" }
-                  : { color: "rgba(255,255,255,0.65)" }}>
+                style={tab === n.id ? { background: "#FFC000", color: "#002d7a" } : { color: "rgba(255,255,255,0.65)" }}>
                 <span>{n.label}</span>
                 {n.badge ? <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === n.id ? "#002d7a" : "#FFC000", color: tab === n.id ? "#FFC000" : "#002d7a" }}>{n.badge}</span> : null}
               </button>
             ))}
-
             <div className="mt-auto pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-              <button onClick={exportCsv}
-                className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors"
-                style={{ color: "rgba(255,255,255,0.65)" }}>
+              <button onClick={exportCsv} className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium" style={{ color: "rgba(255,255,255,0.65)" }}>
                 ⬇ โหลดรายงาน (CSV)
               </button>
             </div>
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="flex-1 overflow-auto p-6">
           {tab === "overview" && <OverviewTab reports={reports} students={students} mentors={mentors} />}
-          {tab === "reports" && <ReportsTab reports={reports} mentors={mentors} readOnly={readOnly} meId={meId} onAssign={assign} onEval={setEvalTarget} />}
+          {tab === "reports" && <ReportsTab reports={reports} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
         </main>
       </div>
-      {evalTarget && <EvalModal report={evalTarget} onClose={() => setEvalTarget(null)} onDone={onEvalDone} />}
       {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
     </div>
   );
 }
 
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+
 function OverviewTab({ reports, students, mentors }: { reports: Rep[]; students: U[]; mentors: U[] }) {
-  const approved = reports.filter(r => r.status === "APPROVED");
-  const avgScore = approved.length
-    ? (approved.reduce((s, r) => { const v = Object.values(r.scores ?? {}); return s + (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0); }, 0) / approved.length).toFixed(1)
-    : "-";
+  const scored = reports.filter(r => r.status === "SCORED");
+
+  // Per-student average: avg all evaluations across all reports
+  const studentStats = students.map(s => {
+    const mine = reports.filter(r => r.user.id === s.id);
+    const allEvals = mine.flatMap(r => r.evaluations);
+    const avg = overallAvg(allEvals);
+    return { student: s, reportCount: mine.length, evalCount: allEvals.length, avg };
+  }).filter(s => s.reportCount > 0);
 
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ภาพรวม</h1>
       <p className="text-sm text-gray-500 mb-6">สรุปข้อมูลการฝึกงาน</p>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="นักศึกษา" value={students.length} />
         <StatCard label="พี่เลี้ยง" value={mentors.length} />
         <StatCard label="รายงานทั้งหมด" value={reports.length} />
-        <StatCard label="รอมอบหมาย" value={reports.filter(r => r.status === "PENDING_ASSIGN").length} accent />
-        <StatCard label="อนุมัติแล้ว" value={approved.length} />
-        <StatCard label="ตีกลับ" value={reports.filter(r => r.status === "REJECTED").length} />
-        <StatCard label="คะแนนเฉลี่ย" value={avgScore} />
-        <StatCard label="รออนุมัติ" value={reports.filter(r => r.status === "PENDING_APPROVAL").length} />
+        <StatCard label="รอประเมิน" value={reports.filter(r => r.status === "PENDING").length} accent />
+        <StatCard label="ประเมินแล้ว" value={scored.length} />
+        <StatCard label="ครั้งที่ประเมิน" value={reports.reduce((s, r) => s + r.evaluations.length, 0)} />
       </div>
 
-      <h2 className="text-base font-semibold mb-3" style={{ color: "#003E8E" }}>สรุปรายนักศึกษา</h2>
+      {studentStats.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+          <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษา</h2>
+          <p className="text-xs text-gray-400 mb-6">เฉลี่ยจากทุกหมวดคะแนน ทุกการประเมิน · สเกล 1–5</p>
+          <ScoreBarChart stats={studentStats} />
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>อนุมัติ</Th><Th>คะแนนเฉลี่ย</Th></tr>
+            <tr><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนเฉลี่ย</Th></tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {students.map(s => {
-              const mine = reports.filter(r => r.user.name === s.name);
-              const mineApproved = mine.filter(r => r.scores);
-              const avg = mineApproved.length
-                ? (mineApproved.reduce((sum, r) => { const v = Object.values(r.scores!); return sum + v.reduce((a, b) => a + b, 0) / v.length; }, 0) / mineApproved.length).toFixed(1)
-                : "-";
+              const mine = reports.filter(r => r.user.id === s.id);
+              const allEvals = mine.flatMap(r => r.evaluations);
+              const avg = overallAvg(allEvals);
               return (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <Td><span className="font-medium text-gray-800">{s.name}</span></Td>
                   <Td>{s.level ? LEVEL_LABEL[s.level] : "-"}</Td>
                   <Td>{mine.length}</Td>
-                  <Td>{mine.filter(r => r.status === "APPROVED").length}</Td>
-                  <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{avg}</span></Td>
+                  <Td>{allEvals.length} ครั้ง</Td>
+                  <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{avg != null ? avg.toFixed(2) : "—"}</span></Td>
                 </tr>
               );
             })}
@@ -182,7 +163,96 @@ function OverviewTab({ reports, students, mentors }: { reports: Rep[]; students:
   );
 }
 
-function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { reports: Rep[]; mentors: U[]; readOnly: boolean; meId: string; onAssign: (id: string, mentorId: string) => void; onEval: (r: Rep) => void }) {
+function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; evalCount: number; avg: number | null }[] }) {
+  const maxScore = 5;
+  const BAR_H = 44;
+  const GAP = 14;
+  const NAME_W = 130;
+  const BAR_AREA = 320;
+  const SCORE_W = 48;
+  const TOTAL_W = NAME_W + BAR_AREA + SCORE_W + 16;
+  const TOTAL_H = stats.length * (BAR_H + GAP) + 20;
+
+  const colors = [
+    ["#003E8E", "#0066CC"],
+    ["#005BB8", "#0077DD"],
+    ["#0052A3", "#006FD6"],
+    ["#00419A", "#0060C4"],
+    ["#002d7a", "#0055B8"],
+  ];
+
+  return (
+    <div className="overflow-x-auto">
+      <svg viewBox={`0 0 ${TOTAL_W} ${TOTAL_H}`} width="100%" style={{ maxWidth: TOTAL_W, display: "block", margin: "0 auto" }}>
+        <defs>
+          {stats.map((_, i) => (
+            <linearGradient key={i} id={`bar-grad-${i}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={colors[i % colors.length][0]} />
+              <stop offset="100%" stopColor={colors[i % colors.length][1]} />
+            </linearGradient>
+          ))}
+          <linearGradient id="bar-bg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#F4F6FB" />
+            <stop offset="100%" stopColor="#EEF2FF" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[1,2,3,4,5].map(v => {
+          const x = NAME_W + 8 + (v / maxScore) * BAR_AREA;
+          return (
+            <g key={v}>
+              <line x1={x} y1={10} x2={x} y2={TOTAL_H - 10} stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,3" />
+              <text x={x} y={TOTAL_H - 2} textAnchor="middle" fontSize="9" fill="#9CA3AF">{v}</text>
+            </g>
+          );
+        })}
+
+        {stats.map(({ student, evalCount, avg }, i) => {
+          const y = 10 + i * (BAR_H + GAP);
+          const barW = avg != null ? (avg / maxScore) * BAR_AREA : 0;
+          const shortName = (student.name ?? "").split(" ").slice(-1)[0] || student.name || "";
+          const displayName = student.nickname ? `${shortName} (${student.nickname})` : shortName;
+
+          return (
+            <g key={student.id}>
+              {/* Name */}
+              <text x={NAME_W - 8} y={y + BAR_H / 2 + 1} textAnchor="end" dominantBaseline="middle" fontSize="12" fill="#374151" fontWeight="500">
+                {displayName}
+              </text>
+
+              {/* Background track */}
+              <rect x={NAME_W + 8} y={y + 4} width={BAR_AREA} height={BAR_H - 8} rx="8" fill="url(#bar-bg)" />
+
+              {/* Score bar */}
+              {avg != null && barW > 0 && (
+                <rect x={NAME_W + 8} y={y + 4} width={barW} height={BAR_H - 8} rx="8" fill={`url(#bar-grad-${i})`}>
+                  <animate attributeName="width" from="0" to={barW} dur="0.7s" fill="freeze" begin={`${i * 0.1}s`} />
+                </rect>
+              )}
+
+              {/* Eval count badge inside bar */}
+              {avg != null && evalCount > 0 && barW > 60 && (
+                <text x={NAME_W + 16} y={y + BAR_H / 2 + 1} dominantBaseline="middle" fontSize="10" fill="rgba(255,255,255,0.8)">
+                  {evalCount} ครั้ง
+                </text>
+              )}
+
+              {/* Score label */}
+              <text x={NAME_W + 8 + BAR_AREA + 8} y={y + BAR_H / 2 + 1} dominantBaseline="middle" fontSize="14" fontWeight="700" fill="#003E8E">
+                {avg != null ? avg.toFixed(2) : "—"}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── Reports Tab ──────────────────────────────────────────────────────────────
+
+function ReportsTab({ reports }: { reports: Rep[] }) {
   const [filter, setFilter] = useState("ALL");
   const filtered = filter === "ALL" ? reports : reports.filter(r => r.status === filter);
 
@@ -191,53 +261,43 @@ function ReportsTab({ reports, mentors, readOnly, meId, onAssign, onEval }: { re
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>รายงาน</h1>
-          <p className="text-sm text-gray-500">จัดการและมอบหมายพี่เลี้ยง</p>
+          <p className="text-sm text-gray-500">รายการรายงานนักศึกษาทั้งหมด</p>
         </div>
         <select value={filter} onChange={e => setFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
           <option value="ALL">ทั้งหมด</option>
-          <option value="PENDING_ASSIGN">รอมอบหมาย</option>
-          <option value="PENDING_APPROVAL">รออนุมัติ</option>
-          <option value="APPROVED">อนุมัติแล้ว</option>
-          <option value="REJECTED">ตีกลับ</option>
+          <option value="PENDING">รอประเมิน</option>
+          <option value="SCORED">ประเมินแล้ว</option>
         </select>
       </div>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">
           <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>พี่เลี้ยง</Th><Th>คะแนน</Th><Th> </Th></tr>
+            <tr><Th>วันที่</Th><Th>นักศึกษา</Th><Th>หัวข้องาน</Th><Th>สถานะ</Th><Th>ผู้ประเมิน</Th><Th>คะแนนเฉลี่ย</Th></tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.map(r => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <Td className="whitespace-nowrap text-gray-500">{r.date.slice(0, 10)}</Td>
-                <Td><span className="font-medium text-gray-800">{r.user.name}</span>{r.user.level && <span className="text-xs text-gray-400 ml-1">{LEVEL_LABEL[r.user.level]}</span>}</Td>
-                <Td><span className="font-medium">{r.title}</span>{r.location && <div className="text-xs text-gray-400">📍 {r.location}</div>}</Td>
-                <Td><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span></Td>
-                <Td>
-                  {readOnly ? (r.assignedMentor?.name ?? "-") : (
-                    <select value={r.assignedMentorId ?? ""} onChange={e => onAssign(r.id, e.target.value)}
-                      className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-[140px]">
-                      <option value="">— มอบหมาย —</option>
-                      {mentors.map(m => <option key={m.id} value={m.id}>{m.name}{m.role === "ADMIN" ? " (Admin)" : ""}</option>)}
-                    </select>
-                  )}
-                </Td>
-                <Td className="text-center">
-                  {r.scores ? <span className="font-semibold" style={{ color: "#003E8E" }}>{(Object.values(r.scores).reduce((a, b) => a + b, 0) / Object.values(r.scores).length).toFixed(1)}</span> : <span className="text-gray-300">—</span>}
-                </Td>
-                <Td>
-                  {!readOnly && r.assignedMentorId === meId && r.status === "PENDING_APPROVAL" && (
-                    <button onClick={() => onEval(r)} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white" style={{ background: "#003E8E" }}>ตรวจงาน</button>
-                  )}
-                </Td>
-              </tr>
-            ))}
+            {filtered.map(r => {
+              const avg = overallAvg(r.evaluations);
+              return (
+                <tr key={r.id} className="hover:bg-gray-50">
+                  <Td className="whitespace-nowrap text-gray-500">{r.date.slice(0, 10)}</Td>
+                  <Td><span className="font-medium text-gray-800">{r.user.name}</span>{r.user.level && <span className="text-xs text-gray-400 ml-1">{LEVEL_LABEL[r.user.level]}</span>}</Td>
+                  <Td><span className="font-medium">{r.title}</span>{r.location && <div className="text-xs text-gray-400">📍 {r.location}</div>}</Td>
+                  <Td><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span></Td>
+                  <Td className="text-center text-gray-500">{r.evaluations.length > 0 ? `${r.evaluations.length} คน` : <span className="text-gray-300">—</span>}</Td>
+                  <Td className="text-center">
+                    {avg != null ? <span className="font-semibold" style={{ color: "#003E8E" }}>{avg.toFixed(2)}</span> : <span className="text-gray-300">—</span>}
+                  </Td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
+
+// ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void }) {
   return (
@@ -266,16 +326,13 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
                   {readOnly
                     ? <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#EEF2FF", color: "#003E8E" }}>{ROLE_LABEL[u.role]}</span>
                     : (
-                      <select value={u.role} onChange={e => onSetRole(u.id, e.target.value)}
-                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white">
+                      <select value={u.role} onChange={e => onSetRole(u.id, e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white">
                         {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     )}
                 </td>
                 <Td>
-                  {u.profileDone
-                    ? <span className="text-xs text-green-600">✓ ครบ</span>
-                    : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
+                  {u.profileDone ? <span className="text-xs text-green-600">✓ ครบ</span> : <span className="text-xs text-amber-500">⚠ ไม่ครบ</span>}
                 </Td>
               </tr>
             ))}
@@ -286,17 +343,16 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
   );
 }
 
+// ─── User Detail Modal ────────────────────────────────────────────────────────
+
 function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[]; onClose: () => void }) {
-  const mine = reports.filter(r => r.user.name === u.name);
-  const approved = mine.filter(r => r.status === "APPROVED");
-  const avgScore = approved.length
-    ? (approved.reduce((s, r) => { const v = Object.values(r.scores ?? {}); return s + (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0); }, 0) / approved.length).toFixed(1)
-    : "-";
+  const mine = reports.filter(r => r.user.id === u.id);
+  const allEvals = mine.flatMap(r => r.evaluations);
+  const avg = overallAvg(allEvals);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="px-6 pt-6 pb-4" style={{ background: "linear-gradient(135deg, #003E8E, #002d7a)" }}>
           <div className="flex items-center gap-4">
             {u.image ? <img src={u.image} className="w-16 h-16 rounded-full ring-2 ring-white/30" alt="" />
@@ -319,8 +375,8 @@ function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[
 
           <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: "1px solid #f3f4f6" }}>
             <StatCard label="รายงาน" value={mine.length} />
-            <StatCard label="อนุมัติ" value={approved.length} />
-            <StatCard label="คะแนนเฉลี่ย" value={avgScore} />
+            <StatCard label="ถูกประเมิน" value={allEvals.length + " ครั้ง"} />
+            <StatCard label="คะแนนเฉลี่ย" value={avg != null ? avg.toFixed(2) : "—"} />
           </div>
         </div>
 
@@ -331,6 +387,8 @@ function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[
     </div>
   );
 }
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
 
 function DR({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null;
@@ -347,51 +405,6 @@ function StatCard({ label, value, accent }: { label: string; value: number | str
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
       <div className="text-2xl font-bold" style={{ color: accent ? "#FFC000" : "#003E8E" }}>{value}</div>
       <div className="text-xs text-gray-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
-
-function EvalModal({ report, onClose, onDone }: { report: Rep; onClose: () => void; onDone: (r: Rep) => void }) {
-  const [scores, setScores] = useState<Record<string, number>>(
-    () => report.scores ?? Object.fromEntries(SCORE_CRITERIA.map(c => [c.key, 3]))
-  );
-  const [comment, setComment] = useState(report.mentorComment ?? "");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (action: "approve" | "reject") => {
-    if (action === "reject" && !comment.trim()) return alert("กรุณาระบุเหตุผลที่ตีกลับ");
-    setBusy(true);
-    const res = await fetch(`/api/reports/${report.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, scores, comment }),
-    });
-    setBusy(false);
-    if (!res.ok) return alert((await res.json()).error ?? "ไม่สำเร็จ");
-    onDone({ ...report, ...(await res.json()) });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-1">ตรวจงาน: {report.user.name}</h2>
-        <p className="text-sm text-gray-500 mb-4">{report.title}</p>
-        <p className="text-sm font-medium text-gray-700 mb-2">ให้คะแนน (1–5)</p>
-        <div className="space-y-3 mb-4">
-          {SCORE_CRITERIA.map(c => (
-            <div key={c.key}>
-              <div className="flex justify-between text-sm mb-1"><span className="text-gray-600">{c.label}</span><span className="font-medium" style={{ color: "#003E8E" }}>{scores[c.key]}</span></div>
-              <input type="range" min={1} max={5} value={scores[c.key]} onChange={e => setScores({ ...scores, [c.key]: +e.target.value })} className="w-full" style={{ accentColor: "#003E8E" }} />
-            </div>
-          ))}
-        </div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">ความเห็น</label>
-        <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none resize-none mb-4" placeholder="ข้อเสนอแนะ / เหตุผลที่ตีกลับ" />
-        <div className="flex gap-3">
-          <button disabled={busy} onClick={() => submit("approve")} className="flex-1 text-white py-2.5 rounded-xl font-medium" style={{ background: "#16a34a" }}>อนุมัติ</button>
-          <button disabled={busy} onClick={() => submit("reject")} className="flex-1 text-white py-2.5 rounded-xl font-medium" style={{ background: "#ef4444" }}>ตีกลับ</button>
-          <button disabled={busy} onClick={onClose} className="px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium">ปิด</button>
-        </div>
-      </div>
     </div>
   );
 }

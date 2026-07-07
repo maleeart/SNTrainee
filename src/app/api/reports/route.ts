@@ -42,23 +42,22 @@ export async function POST(req: NextRequest) {
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "ไม่พบรายงาน" }, { status: 404 });
     }
-    if (existing.status === "APPROVED") {
-      return NextResponse.json({ error: "รายงานนี้อนุมัติแล้ว แก้ไขไม่ได้" }, { status: 400 });
+    if (existing.status === "SCORED") {
+      return NextResponse.json({ error: "รายงานที่ประเมินแล้วแก้ไขไม่ได้" }, { status: 400 });
     }
     if (!b.editReason?.trim()) {
       return NextResponse.json({ error: "กรุณาระบุเหตุผลที่แก้ไข" }, { status: 400 });
     }
-    const status = existing.assignedMentorId ? "PENDING_APPROVAL" : "PENDING_ASSIGN";
     const report = await prisma.report.update({
       where: { id: b.id },
-      data: { ...data, date, status },
+      data: { ...data, date },
     });
     return NextResponse.json(report);
   }
 
   // สร้างรายงานใหม่
   const report = await prisma.report.create({
-    data: { ...data, userId: session.user.id, date, status: "PENDING_ASSIGN" },
+    data: { ...data, userId: session.user.id, date, status: "PENDING" },
   });
   return NextResponse.json(report);
 }

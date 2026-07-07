@@ -1,0 +1,3 @@
+-- Step 1: Add new enum values PENDING and SCORED
+ALTER TYPE "ReportStatus" ADD VALUE IF NOT EXISTS 'PENDING';
+ALTER TYPE "ReportStatus" ADD VALUE IF NOT EXISTS 'SCORED';

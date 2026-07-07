@@ -13,10 +13,19 @@ export default async function DashboardPage() {
 
   if (!me || !me.profileDone || !isProfileComplete(me)) redirect("/profile");
 
-  const reports = await prisma.report.findMany({
+  const rawReports = await prisma.report.findMany({
     where: { userId: u.id },
     orderBy: { date: "desc" },
+    include: { evaluations: { select: { scores: true } } },
   });
 
-  return <Dashboard user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }} initialReports={reports} />;
+  const reports = rawReports.map(r => {
+    const evals = r.evaluations as { scores: Record<string, number> }[];
+    const all = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
+    const evalSummary = { count: evals.length, overall: all.length ? (all.reduce((a, b) => a + b, 0) / all.length).toFixed(1) : "-" };
+    const { evaluations: _, ...rest } = r;
+    return { ...rest, evalSummary };
+  });
+
+  return <Dashboard user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }} initialReports={JSON.parse(JSON.stringify(reports))} />;
 }

@@ -36,10 +36,8 @@ enum SystemCategory {
 }
 
 enum ReportStatus {
-  PENDING_ASSIGN // รอมอบหมาย
-  PENDING_APPROVAL // รออนุมัติ
-  APPROVED // อนุมัติ
-  REJECTED // ตีกลับ
+  PENDING  // รอประเมิน
+  SCORED   // ประเมินแล้ว (มีพี่เลี้ยงประเมินอย่างน้อย 1 คน)
 }
 
 model Account {
@@ -83,10 +81,10 @@ model User {
   endDate       DateTime? @db.Date
   profileDone   Boolean   @default(false)
 
-  accounts        Account[]
-  sessions        Session[]
-  reports         Report[]  @relation("StudentReports")
-  mentoredReports Report[]  @relation("MentorReports")
+  accounts    Account[]
+  sessions    Session[]
+  reports     Report[]     @relation("StudentReports")
+  evaluations Evaluation[] @relation("MentorEvaluations")
 }
 
 model VerificationToken {
@@ -104,30 +102,39 @@ model Report {
   description String   @db.Text
   tasks       String[] @default([])
 
-  // งานช่างไฟ — อาคารและบริเวณ
   jobType        JobType?
   systemCategory SystemCategory?
-  location       String? // อาคาร/ชั้น/บริเวณ
-  tools          String[]        @default([])
-  ppe            String[]        @default([]) // รายการความปลอดภัยที่ทำ
-  learned        String?         @db.Text // ปัญหาที่พบ
-  solution       String?         @db.Text // วิธีการแก้ปัญหา
-  result         String?         @db.Text // ผลลัพธ์และสิ่งที่ได้รับ
-  images         String[]        @default([]) // URLs รูปภาพประกอบ
-  editReason     String?         @db.Text // เหตุผลที่แก้ไข
+  location       String?
+  tools          String[] @default([])
+  ppe            String[] @default([])
+  learned        String?  @db.Text
+  solution       String?  @db.Text
+  result         String?  @db.Text
+  images         String[] @default([])
+  editReason     String?  @db.Text
 
   userId String
   user   User   @relation("StudentReports", fields: [userId], references: [id], onDelete: Cascade)
 
-  assignedMentorId String?
-  assignedMentor   User?   @relation("MentorReports", fields: [assignedMentorId], references: [id], onDelete: SetNull)
+  status ReportStatus @default(PENDING)
 
-  status        ReportStatus @default(PENDING_ASSIGN)
-  mentorComment String?      @db.Text
-  scores        Json? // { skill, safety, responsibility, quality, report } 1-5
-  evaluatedAt   DateTime?
+  evaluations Evaluation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Evaluation {
+  id       String  @id @default(cuid())
+  reportId String
+  report   Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  mentorId String
+  mentor   User    @relation("MentorEvaluations", fields: [mentorId], references: [id])
+  scores   Json    // { skill, safety, responsibility, quality, report } 1-5
+  comment  String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([reportId, mentorId])
 }

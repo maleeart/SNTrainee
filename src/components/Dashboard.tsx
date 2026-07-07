@@ -2,14 +2,12 @@
 
 import { useState, useRef } from "react";
 import type { Report } from "@prisma/client";
-import {
-  STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA,
-} from "@/lib/labels";
+import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
-type Scores = Record<string, number>;
-type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null };
+type EvalSum = { count: number; overall: string };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: EvalSum };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
@@ -49,10 +47,10 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
 
   const blank = (): ReportEx => ({
     id: "", date: new Date(today), title: "", description: "", tasks: [],
-    jobType: null, systemCategory: null, location: null, tools: [], ppe: [], learned: null, solution: null, result: null,
+    jobType: null, systemCategory: null,
+    location: null, tools: [], ppe: [], learned: null, solution: null, result: null,
     images: [], editReason: null,
-    userId: user.id ?? "", assignedMentorId: null, status: "PENDING_ASSIGN",
-    mentorComment: null, scores: null, evaluatedAt: null,
+    userId: user.id ?? "", status: "PENDING",
     createdAt: new Date(), updatedAt: new Date(),
   });
 
@@ -105,14 +103,6 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
     }
   };
 
-  const scored = reports.filter(r => r.scores);
-  const avg = scored.length
-    ? (scored.reduce((s, r) => {
-        const v = Object.values(r.scores as Scores);
-        return s + v.reduce((a, b) => a + b, 0) / v.length;
-      }, 0) / scored.length).toFixed(1)
-    : "-";
-
   return (
     <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
       <AppNav name={user.name} nickname={user.nickname} email={user.email} image={user.image} role={user.role ?? "STUDENT"} level={user.level} school={user.school} advisor={user.advisor} startDate={user.startDate} endDate={user.endDate} profileHref="/profile" />
@@ -130,11 +120,10 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
           <Stat label="รายการทั้งหมด" value={reports.length} />
-          <Stat label="อนุมัติแล้ว" value={reports.filter(r => r.status === "APPROVED").length} />
-          <Stat label="รออนุมัติ" value={reports.filter(r => r.status === "PENDING_APPROVAL" || r.status === "PENDING_ASSIGN").length} />
-          <Stat label="คะแนนเฉลี่ย" value={avg} />
+          <Stat label="ประเมินแล้ว" value={reports.filter(r => r.status === "SCORED").length} />
+          <Stat label="รอประเมิน" value={reports.filter(r => r.status === "PENDING").length} />
         </div>
 
         {reports.length === 0 ? (
@@ -163,18 +152,9 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                         {r.result && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ผลลัพธ์:</span> {r.result}</p>}
                       </div>
                     )}
-                    {r.mentorComment && (
-                      <div className="mt-2 text-sm bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-amber-800">
-                        <span className="font-medium">พี่เลี้ยง:</span> {r.mentorComment}
-                      </div>
-                    )}
-                    {r.scores != null && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {SCORE_CRITERIA.map(c => (
-                          <span key={c.key} className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                            {c.label}: {(r.scores as Scores)[c.key] ?? "-"}
-                          </span>
-                        ))}
+                    {r.evalSummary && r.evalSummary.count > 0 && (
+                      <div className="mt-2 text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg">
+                        👥 {r.evalSummary.count} พี่เลี้ยงประเมิน · เฉลี่ย {r.evalSummary.overall}
                       </div>
                     )}
                     {r.images?.length > 0 && (
@@ -188,10 +168,10 @@ export default function Dashboard({ user, initialReports }: { user: User; initia
                     )}
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
-                    {r.status !== "APPROVED" && (
+                    {r.status !== "SCORED" && (
                       <button onClick={() => { setEditing({ ...r }); setToolInput(""); setPpeInput(""); }} className="text-sm font-medium" style={{ color: "#003E8E" }}>แก้ไข</button>
                     )}
-                    {r.status !== "APPROVED" && (
+                    {r.status !== "SCORED" && (
                       <button onClick={() => del(r.id)} className="text-sm text-red-400 hover:text-red-600">ลบ</button>
                     )}
                   </div>

@@ -18,8 +18,8 @@ export default async function AdminPage() {
     prisma.report.findMany({
       orderBy: [{ status: "asc" }, { date: "desc" }],
       include: {
-        user: { select: { name: true, level: true, school: true } },
-        assignedMentor: { select: { name: true } },
+        user: { select: { id: true, name: true, level: true, school: true } },
+        evaluations: { include: { mentor: { select: { id: true, name: true, nickname: true } } } },
       },
     }),
   ]);

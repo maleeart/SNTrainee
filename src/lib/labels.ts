@@ -28,17 +28,13 @@ export const SYSTEM_LABEL: Record<string, string> = {
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  PENDING_ASSIGN: "รอมอบหมาย",
-  PENDING_APPROVAL: "รออนุมัติ",
-  APPROVED: "อนุมัติแล้ว",
-  REJECTED: "ตีกลับ",
+  PENDING: "รอประเมิน",
+  SCORED:  "ประเมินแล้ว",
 };
 
 export const STATUS_COLOR: Record<string, string> = {
-  PENDING_ASSIGN: "bg-gray-100 text-gray-600",
-  PENDING_APPROVAL: "bg-amber-100 text-amber-700",
-  APPROVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
+  PENDING: "bg-gray-100 text-gray-600",
+  SCORED:  "bg-blue-100 text-blue-700",
 };
 
 // เกณฑ์ประเมิน 1-5 ต่อหัวข้อ
