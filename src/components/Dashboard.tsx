@@ -349,7 +349,8 @@ function ChipInput({ value, setValue, items, onAdd, onRemove, placeholder }: {
       <div className="mb-1.5">
         <input className="input" value={value} placeholder={placeholder}
           onChange={e => setValue(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())} />
+          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())}
+          onBlur={add} />
       </div>
       <div className="flex flex-wrap gap-1">
         {items.map((t, i) => (
