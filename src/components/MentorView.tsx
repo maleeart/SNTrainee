@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AppNav from "./AppNav";
+import SpinWheel from "./SpinWheel";
 import { STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA } from "@/lib/labels";
 
 type EvalRecord = {
@@ -57,6 +58,8 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
   const [editReasonPopup, setEditReasonPopup] = useState<string | null>(null);
   const [studentFilter, setStudentFilter] = useState("ALL");
   const [batchFilter, setBatchFilter] = useState("ALL");
+  const [showSpin, setShowSpin] = useState(false);
+  const [spinBatchFilter, setSpinBatchFilter] = useState("ALL");
 
   // Build unique student + batch lists from reports
   const studentMap = new Map<string, Rep["user"]>();
@@ -100,9 +103,16 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
       <main className="max-w-6xl mx-auto px-4 py-6">
 
         {/* Header */}
-        <div className="mb-5">
-          <h1 className="text-xl font-bold text-gray-800">รายงานนักศึกษาฝึกงาน</h1>
-          <p className="text-gray-400 text-xs mt-0.5">คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
+        <div className="flex items-start justify-between mb-5 gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">รายงานนักศึกษาฝึกงาน</h1>
+            <p className="text-gray-400 text-xs mt-0.5">คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
+          </div>
+          <button onClick={() => setShowSpin(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-sm shrink-0 transition-all active:scale-95 shadow-md"
+            style={{ background: "linear-gradient(135deg,#FFC000,#ffaa00)", color: "#0D1F3C", boxShadow: "0 4px 16px rgba(255,192,0,0.35)" }}>
+            🎡 Spin
+          </button>
         </div>
 
         {/* Stat cards */}
@@ -264,6 +274,43 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
           onDone={onEvalDone}
         />
       )}
+
+      {/* Spin wheel overlay */}
+      {showSpin && (() => {
+        // Build spin batch list
+        const spinBatchKeys = [...new Set(
+          studentList.map(u => batchKeyFromDates(u.startDate, u.endDate)).filter(Boolean) as string[]
+        )].sort();
+        const spinBatchMap = Object.fromEntries(spinBatchKeys.map((k, i) => [k, batchLabelFromKey(k, i + 1)]));
+
+        // Filtered students for wheel
+        const wheelStudents = studentList
+          .filter(u => spinBatchFilter === "ALL" || batchKeyFromDates(u.startDate, u.endDate) === spinBatchFilter)
+          .map(u => ({ id: u.id, label: u.nickname ?? (u.name ?? "").split(" ")[0] ?? u.name ?? "?" }));
+
+        // Add mentor at a random position
+        const mentorEntry = { id: meId, label: meNickname ?? meName.split(" ")[0] ?? meName, isMentor: true };
+        const insertAt = Math.floor(Math.random() * (wheelStudents.length + 1));
+        const people = [...wheelStudents.slice(0, insertAt), mentorEntry, ...wheelStudents.slice(insertAt)];
+
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(13,31,60,0.97)" }}>
+            {/* Batch filter bar at top */}
+            {spinBatchKeys.length > 0 && (
+              <div className="flex items-center gap-2 px-6 pt-4 shrink-0">
+                <span className="text-xs text-white/40 font-semibold">กรองรุ่น:</span>
+                <select value={spinBatchFilter} onChange={e => setSpinBatchFilter(e.target.value)}
+                  className="border-0 rounded-xl px-3 py-1.5 text-xs font-medium"
+                  style={{ background: "rgba(255,255,255,0.1)", color: "white" }}>
+                  <option value="ALL" style={{ color: "#000" }}>ทุกรุ่น</option>
+                  {spinBatchKeys.map(k => <option key={k} value={k} style={{ color: "#000" }}>{spinBatchMap[k]}</option>)}
+                </select>
+              </div>
+            )}
+            <SpinWheel key={spinBatchFilter} people={people} onClose={() => setShowSpin(false)} />
+          </div>
+        );
+      })()}
 
       {editReasonPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setEditReasonPopup(null)}>

@@ -79,63 +79,114 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
   };
 
-  const NAV: { id: Tab; label: string; badge?: number }[] = [
-    { id: "overview", label: "ภาพรวม" },
-    { id: "logs", label: "บันทึกการฝึกงาน", badge: pending },
-    { id: "export", label: "รายงาน" },
-    { id: "users", label: "ผู้ใช้งาน" },
-    { id: "announce", label: "ประกาศ" },
+  const NAV: { id: Tab; label: string; badge?: number; icon: React.ReactNode }[] = [
+    { id: "overview",  label: "ภาพรวม",           icon: <IconGrid /> },
+    { id: "logs",      label: "บันทึกการฝึกงาน",  badge: pending, icon: <IconClipboard /> },
+    { id: "export",    label: "รายงาน",            icon: <IconExport /> },
+    { id: "users",     label: "ผู้ใช้งาน",         icon: <IconUsers /> },
+    { id: "announce",  label: "ประกาศ",            icon: <IconMega /> },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#F4F6FB" }}>
-      <div style={{ background: "#003E8E" }} className="md:hidden flex items-center px-3 h-10 relative z-10">
-        <button className="text-white/70 hover:text-white p-1" onClick={() => setSideOpen(o => !o)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-      </div>
-      <div className="flex-shrink-0 relative">
-        <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
-        <button onClick={() => router.refresh()} title="รีเฟรชข้อมูล"
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
-          </svg>
-        </button>
-      </div>
+    <div className="min-h-screen flex flex-col" style={{ background: "#F0F2F8" }}>
+      {/* AppNav */}
+      <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
 
-      <div className="flex flex-1 overflow-hidden">
-        {sideOpen && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={() => setSideOpen(false)} />}
-        <aside className={`fixed md:static inset-y-0 left-0 z-30 md:z-auto w-56 flex-shrink-0 flex flex-col transition-transform duration-200 ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
-          style={{ background: "#002d7a", top: 0, paddingTop: "3.5rem" }}>
-          <div className="flex flex-col flex-1 py-4 px-3">
-            {NAV.map(n => (
-              <button key={n.id} onClick={() => { setTab(n.id); setSideOpen(false); }}
-                className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-medium mb-1 transition-colors text-left"
-                style={tab === n.id ? { background: "#FFC000", color: "#002d7a" } : { color: "rgba(255,255,255,0.65)" }}>
-                <span>{n.label}</span>
-                {n.badge ? <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === n.id ? "#002d7a" : "#FFC000", color: tab === n.id ? "#FFC000" : "#002d7a" }}>{n.badge}</span> : null}
-              </button>
-            ))}
+      <div className="flex flex-1 min-h-0">
+        {/* Mobile overlay */}
+        {sideOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSideOpen(false)} />}
+
+        {/* Sidebar */}
+        <aside className={`fixed md:static inset-y-0 left-0 z-30 md:z-auto flex-shrink-0 flex flex-col transition-transform duration-250 ease-in-out ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+          style={{ width: 232, background: "#0D1F3C", top: 0 }}>
+
+          {/* Sidebar brand header (mobile: always; desktop: below AppNav so hidden by overflow) */}
+          <div className="flex items-center justify-between px-4 h-14 border-b shrink-0 md:hidden"
+            style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+            <span className="font-black italic text-white text-base tracking-wide" style={{ fontFamily: "'Arial Black',sans-serif" }}>กบห-ธ.</span>
+            <button onClick={() => setSideOpen(false)} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          {/* Nav section label */}
+          <div className="px-4 pt-5 pb-2">
+            <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>เมนูหลัก</p>
+          </div>
+
+          {/* Nav items */}
+          <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+            {NAV.map(n => {
+              const active = tab === n.id;
+              return (
+                <button key={n.id} onClick={() => { setTab(n.id); setSideOpen(false); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left relative"
+                  style={active
+                    ? { background: "rgba(255,255,255,0.10)", color: "#fff", fontWeight: 700 }
+                    : { color: "rgba(255,255,255,0.5)" }}>
+                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "#FFC000" }} />}
+                  <span className="shrink-0" style={{ color: active ? "#FFC000" : "rgba(255,255,255,0.4)" }}>{n.icon}</span>
+                  <span className="flex-1 truncate">{n.label}</span>
+                  {n.badge ? (
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+                      style={{ background: "#FFC000", color: "#0D1F3C" }}>
+                      {n.badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar footer */}
+          <div className="px-3 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+            <button onClick={() => router.refresh()}
+              className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm transition-colors"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.85)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              <span>รีเฟรชข้อมูล</span>
+            </button>
           </div>
         </aside>
 
-        <main className="flex-1 overflow-auto p-6">
-          {tab !== "users" && batchKeys.length > 0 && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500">กรองรุ่น:</span>
-              <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white shadow-sm">
-                <option value="ALL">ทุกรุ่น</option>
-                {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
-              </select>
-            </div>
-          )}
-          {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}
-          {tab === "logs" && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
-          {tab === "export" && <ExportTab reports={filteredReportsByBatch} students={students} />}
-          {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
-          {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
+        {/* Mobile hamburger FAB */}
+        <button className="md:hidden fixed bottom-5 left-4 z-10 w-11 h-11 rounded-2xl shadow-lg flex items-center justify-center"
+          style={{ background: "#003E8E" }}
+          onClick={() => setSideOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-auto">
+          {/* Topbar inside main */}
+          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-gray-100 px-6 h-12 flex items-center gap-3">
+            <span className="text-sm font-semibold text-gray-800">{NAV.find(n => n.id === tab)?.label}</span>
+            {tab !== "users" && batchKeys.length > 0 && (
+              <>
+                <div className="w-px h-4 bg-gray-200" />
+                <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white">
+                  <option value="ALL">ทุกรุ่น</option>
+                  {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
+                </select>
+              </>
+            )}
+          </div>
+
+          <div className="p-6">
+            {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}
+            {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
+            {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}
+            {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
+            {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
+          </div>
         </main>
       </div>
       {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
@@ -1408,6 +1459,15 @@ function AnnounceTab({ readOnly }: { readOnly: boolean }) {
   );
 }
 
+// ─── Sidebar Icons ────────────────────────────────────────────────────────────
+const I = (d: string) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>;
+function IconGrid()      { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>; }
+function IconClipboard() { return I("M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4"); }
+function IconExport()    { return I("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"); }
+function IconUsers()     { return I("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 4a4 4 0 0 1 4 4v2"); }
+function IconMega()      { return I("M3 11l19-9-9 19-2-8-8-2zM22 2 11 13"); }
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
