@@ -159,7 +159,10 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
               const avg = overallAvg(allEvals);
               return (
                 <tr key={s.id} className="hover:bg-gray-50">
-                  <Td><span className="font-medium text-gray-800">{s.name}</span></Td>
+                  <Td>
+                    <span className="font-medium text-gray-800">{s.name}</span>
+                    {s.nickname && <span className="text-xs text-gray-400 ml-1">({s.nickname})</span>}
+                  </Td>
                   <Td>{s.level ? LEVEL_LABEL[s.level] : "-"}</Td>
                   <Td>{mine.length}</Td>
                   <Td>{allEvals.length} ครั้ง</Td>
