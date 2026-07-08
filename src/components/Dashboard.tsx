@@ -343,11 +343,10 @@ function ChipInput({ value, setValue, items, onAdd, onRemove, placeholder }: {
   const add = () => { if (value.trim()) { onAdd(value.trim()); setValue(""); } };
   return (
     <>
-      <div className="flex gap-1.5 mb-1.5">
-        <input className="input flex-1" value={value} placeholder={placeholder}
+      <div className="mb-1.5">
+        <input className="input" value={value} placeholder={placeholder}
           onChange={e => setValue(e.target.value)}
           onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())} />
-        <button onClick={add} className="px-2.5 rounded-lg text-xs font-medium shrink-0" style={{ background: "#EEF4FF", color: "#003E8E" }}>เพิ่ม</button>
       </div>
       <div className="flex flex-wrap gap-1">
         {items.map((t, i) => (
