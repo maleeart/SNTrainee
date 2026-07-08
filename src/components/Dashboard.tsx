@@ -59,9 +59,12 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
     if (!editing) return;
     if (!editing.title.trim()) return alert("กรุณากรอกหัวข้องาน");
     if (editing.id && !reason) { setEditReason(""); setReasonPopup(true); return; }
+    // flush any uncommitted chip text before saving
+    const tools = toolInput.trim() ? [...editing.tools, toolInput.trim()] : editing.tools;
+    const ppe   = ppeInput.trim()  ? [...editing.ppe,   ppeInput.trim()]  : editing.ppe;
     const res = await fetch("/api/reports", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...editing, date: iso(editing.date), editReason: reason ?? null }),
+      body: JSON.stringify({ ...editing, tools, ppe, date: iso(editing.date), editReason: reason ?? null }),
     });
     if (!res.ok) return alert((await res.json()).error ?? "บันทึกไม่สำเร็จ");
     const saved: ReportEx = await res.json();
