@@ -1,10 +1,16 @@
 import JSZip from "jszip";
 import { SCORE_CRITERIA, LEVEL_LABEL, STATUS_LABEL } from "./labels";
 
-// EMU constants (1 inch = 914400 EMUs)
+// ─── EMU constants ────────────────────────────────────────────────────────────
 const SLD_W = 12192000;
 const SLD_H = 6858000;
+// Left "white" content area (slideLayout2 has decoration on the right)
+const CONTENT_X = 457200;   // left margin
+const CONTENT_Y = 1650000;  // below title
+const CONTENT_W = 6800000;  // safe area width (ends before diagonal decoration)
+const CONTENT_H = SLD_H - CONTENT_Y - 200000; // to bottom margin
 
+// ─── XML helpers ─────────────────────────────────────────────────────────────
 function esc(s: string) {
   return s
     .replace(/&/g, "&amp;")
@@ -13,7 +19,7 @@ function esc(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-// Build a text run using TH Sarabun New (proper Unicode Thai)
+// TH Sarabun New run (Unicode Thai, matches theme accent colors)
 function run(
   text: string,
   opts: { bold?: boolean; sz?: number; color?: string; italic?: boolean } = {}
@@ -30,40 +36,42 @@ function p(content: string, spacePts = 0) {
 
 function labelLine(label: string, value: string, sz = 1600) {
   if (!value?.trim()) return "";
-  return p(
-    run(label, { bold: true, sz, color: "1F4E79" }) +
-    run(value, { sz })
-  , 2);
+  return p(run(label, { bold: true, sz, color: "1F4E79" }) + run(value, { sz }), 2);
 }
 
 function sectionHeader(label: string) {
   return p(run(label, { bold: true, sz: 1800, color: "1F4E79" }), 6);
 }
 
-function chips(items: string[], sz = 1500) {
-  if (!items.length) return "";
-  return p(run(items.join("  ·  "), { sz, color: "444444" }), 1);
+function textBox(x: number, y: number, cx: number, cy: number, bodyXml: string, id = 10) {
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Body${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:normAutofit/></a:bodyPr><a:lstStyle/>${bodyXml}</p:txBody></p:sp>`;
 }
 
-// Full text box shape XML
-function textBox(x: number, y: number, cx: number, cy: number, bodyXml: string, idOffset = 10) {
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${idOffset}" name="Body"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:normAutofit/></a:bodyPr><a:lstStyle/>${bodyXml}</p:txBody></p:sp>`;
+function picShape(rId: string, x: number, y: number, cx: number, cy: number, id: number) {
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Img${id}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
 }
 
-// Inject shapes into existing slide XML (before closing </p:spTree>)
 function injectShapes(slideXml: string, shapesXml: string) {
   return slideXml.replace("</p:spTree>", shapesXml + "</p:spTree>");
 }
 
+// Replace the title text in a cloned slide2 XML
+function replaceTitleText(slideXml: string, newTitle: string) {
+  return slideXml.replace(
+    /(<p:sp>[\s\S]*?ph type="title"[\s\S]*?<a:t>)[^<]*([\s\S]*?<\/a:t>[\s\S]*?<\/p:sp>)/,
+    `$1${esc(newTitle)}$2`
+  );
+}
+
 // Replace subtitle body in slide1
 function replaceSubtitle(slide1Xml: string, newTxBody: string) {
-  // Replace the <p:txBody>...</p:txBody> inside the Subtitle shape
   return slide1Xml.replace(
     /(<p:sp>(?:(?!<\/p:sp>)[\s\S])*?Subtitle 2(?:(?!<\/p:sp>)[\s\S])*?)<p:txBody>[\s\S]*?<\/p:txBody>(<\/p:sp>)/,
     `$1${newTxBody}$2`
   );
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Rep = {
   id: string; date: string; title: string; description: string;
   location: string | null; tools: string[] | null; ppe: string[] | null; images: string[];
@@ -82,103 +90,159 @@ function avgPerCriteria(evals: Rep["evaluations"]) {
   ]));
 }
 
-function buildReportSlide(base: string, r: Rep, showStudent: boolean): string {
+// ─── Image fetching ───────────────────────────────────────────────────────────
+async function fetchImageBytes(url: string): Promise<{ data: Uint8Array; ext: string } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const ct = res.headers.get("content-type") ?? "";
+    const ext = ct.includes("png") ? "png" : "jpg";
+    const buf = await res.arrayBuffer();
+    return { data: new Uint8Array(buf), ext };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Build a single report slide ─────────────────────────────────────────────
+async function buildReportSlide(
+  base: string,
+  r: Rep,
+  showStudent: boolean,
+  zip: JSZip,
+  slideIndex: number,
+): Promise<{ xml: string; rels: string }> {
   const tools = r.tools ?? [];
   const ppe = r.ppe ?? [];
   const evals = r.evaluations ?? [];
   const criteria = avgPerCriteria(evals);
   const allNums = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
   const overall = allNums.length ? allNums.reduce((a, b) => a + b, 0) / allNums.length : null;
+  const images = r.images ?? [];
 
+  // ── Fetch and embed images ─────────────────────────────────────────────────
+  const embeddedImages: { rId: string; ext: string }[] = [];
+  const relEntries: string[] = [
+    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>`,
+  ];
+
+  for (let i = 0; i < images.length; i++) {
+    const img = await fetchImageBytes(images[i]);
+    if (!img) continue;
+    const mediaName = `export_s${slideIndex}_i${i}.${img.ext}`;
+    zip.file(`ppt/media/${mediaName}`, img.data);
+    const rId = `rId${10 + i}`;
+    relEntries.push(
+      `<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${mediaName}"/>`
+    );
+    embeddedImages.push({ rId, ext: img.ext });
+  }
+
+  const rels = `<?xml version="1.0" encoding="utf-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relEntries.join("")}</Relationships>`;
+
+  // ── Update slide title to report date + title ───────────────────────────────
+  let slideXml = replaceTitleText(base, `${r.date.slice(0, 10)}  ${r.title}`);
+
+  // ── Build body text ─────────────────────────────────────────────────────────
   let body = "";
 
-  // Student header (ALL mode)
   if (showStudent) {
     const nm = r.user.name ?? "";
     const nn = r.user.nickname ? ` (${r.user.nickname})` : "";
     body += sectionHeader(`นักศึกษา: ${nm}${nn}`);
   }
 
-  // Date + location
-  const dateLoc = [r.date.slice(0, 10), r.location].filter(Boolean).join("  |  สถานที่: ");
-  body += labelLine("วันที่: ", showStudent ? dateLoc : (r.location ? `${r.date.slice(0, 10)}  |  สถานที่: ${r.location}` : r.date.slice(0, 10)));
+  if (r.location) body += labelLine("สถานที่: ", r.location);
+  if (r.description) body += labelLine("รายละเอียด: ", r.description, 1600);
 
-  // Title
-  body += p(run(r.title, { bold: true, sz: 2000, color: "1F4E79" }), 4);
-
-  // Description
-  if (r.description) body += labelLine("รายละเอียด: ", r.description);
-
-  // Problem / solution / result in one section
   if (r.learned || r.solution || r.result) {
-    if (r.learned) body += labelLine("ปัญหาที่พบ: ", r.learned, 1600);
-    if (r.solution) body += labelLine("วิธีแก้ไข: ", r.solution, 1600);
-    if (r.result) body += labelLine("ผลลัพธ์: ", r.result, 1600);
+    if (r.learned) body += labelLine("ปัญหาที่พบ: ", r.learned, 1500);
+    if (r.solution) body += labelLine("วิธีแก้ไข: ", r.solution, 1500);
+    if (r.result) body += labelLine("ผลลัพธ์: ", r.result, 1500);
   }
 
-  // Tools + PPE
-  if (tools.length) {
+  if (tools.length)
     body += p(run("เครื่องมือ: ", { bold: true, sz: 1500, color: "1F4E79" }) + run(tools.join(", "), { sz: 1500 }), 3);
-  }
-  if (ppe.length) {
+  if (ppe.length)
     body += p(run("อุปกรณ์ป้องกัน: ", { bold: true, sz: 1500, color: "1F4E79" }) + run(ppe.join(", "), { sz: 1500 }), 1);
-  }
 
-  // Evaluation summary
   if (evals.length > 0 && overall != null) {
     body += p(
-      run(`ผลการประเมิน: `, { bold: true, sz: 1500, color: "1F4E79" }) +
-      run(`${evals.length} คน · เฉลี่ย ${overall.toFixed(2)}/5.00`, { sz: 1500, color: "444444" })
-    , 4);
-    const scoreStr = SCORE_CRITERIA.map(c => {
-      const v = criteria[c.key];
-      return v != null ? `${c.label} ${v.toFixed(1)}` : null;
-    }).filter(Boolean).join("  ·  ");
+      run("ผลการประเมิน: ", { bold: true, sz: 1500, color: "1F4E79" }) +
+      run(`${evals.length} คน · เฉลี่ย ${overall.toFixed(2)}/5.00`, { sz: 1500, color: "444444" }),
+      4
+    );
+    const scoreStr = SCORE_CRITERIA.map(c => criteria[c.key] != null ? `${c.label} ${criteria[c.key].toFixed(1)}` : null).filter(Boolean).join("  ·  ");
     if (scoreStr) body += p(run(scoreStr, { sz: 1300, color: "666666", italic: true }), 1);
   }
 
-  // Inject content box (below title area: y ~1400000, height fills to bottom)
-  const shape = textBox(457200, 1400000, SLD_W - 914400, SLD_H - 1600000, body);
-  return injectShapes(base, shape);
+  // ── Layout: text box + image shapes ────────────────────────────────────────
+  let shapes = "";
+  const hasImages = embeddedImages.length > 0;
+
+  if (!hasImages) {
+    // Full-width text
+    shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H, body, 10);
+  } else if (embeddedImages.length <= 2) {
+    // Text left (56%), images stacked right (40%)
+    const textCx = Math.round(CONTENT_W * 0.56);
+    const imgX = CONTENT_X + textCx + 80000;
+    const imgCx = CONTENT_W - textCx - 80000;
+    const imgH = Math.round(CONTENT_H / 2) - 40000;
+
+    shapes += textBox(CONTENT_X, CONTENT_Y, textCx, CONTENT_H, body, 10);
+    embeddedImages.forEach(({ rId }, i) => {
+      const y = CONTENT_Y + i * (imgH + 60000);
+      shapes += picShape(rId, imgX, y, imgCx, imgH, 20 + i);
+    });
+  } else {
+    // Text top, images in row at bottom (max 4 shown)
+    const textCy = Math.round(CONTENT_H * 0.50);
+    const imgY = CONTENT_Y + textCy + 80000;
+    const imgH = CONTENT_H - textCy - 80000;
+    const shown = embeddedImages.slice(0, 4);
+    const imgW = Math.floor(CONTENT_W / shown.length) - 20000;
+
+    shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, textCy, body, 10);
+    shown.forEach(({ rId }, i) => {
+      const x = CONTENT_X + i * (imgW + 20000);
+      shapes += picShape(rId, x, imgY, imgW, imgH, 20 + i);
+    });
+  }
+
+  const xml = injectShapes(slideXml, shapes);
+  return { xml, rels };
 }
 
+// ─── Helpers for presentation manifest ───────────────────────────────────────
 function slideContentType(name: string) {
   return `<Override PartName="/ppt/slides/${name}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`;
 }
 
-export async function exportPptx(
-  studentId: string,
-  reports: Rep[],
-  students: U[]
-) {
+// ─── Main export ─────────────────────────────────────────────────────────────
+export async function exportPptx(studentId: string, reports: Rep[], students: U[]) {
   const res = await fetch("/template-report.pptx");
   if (!res.ok) throw new Error("ไม่พบ template");
   const buf = await res.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
 
-  // Read key files
   const slide1Xml = await zip.file("ppt/slides/slide1.xml")!.async("string");
   const slide2Xml = await zip.file("ppt/slides/slide2.xml")!.async("string");
-  const slide2Rels = await zip.file("ppt/slides/_rels/slide2.xml.rels")!.async("string");
   let presentXml = await zip.file("ppt/presentation.xml")!.async("string");
   let presRels = await zip.file("ppt/_rels/presentation.xml.rels")!.async("string");
   let contentTypes = await zip.file("[Content_Types].xml")!.async("string");
 
-  // ── Slide 1: fill personal info ───────────────────────────────────────────
-  const targetStudents = studentId === "ALL"
-    ? students
-    : students.filter(s => s.id === studentId);
+  // ── Slide 1: fill personal info ────────────────────────────────────────────
+  const targetStudents = studentId === "ALL" ? students : students.filter(s => s.id === studentId);
 
   let subtitleBody: string;
   if (studentId === "ALL") {
-    // Multiple students: Name (nickname) · School per line
     const lines = targetStudents.map(s => {
       const nn = s.nickname ? ` (${s.nickname})` : "";
       const lvl = s.level ? LEVEL_LABEL[s.level] + " " : "";
-      const school = s.school ?? "";
       return p(
         run(`${s.name ?? ""}${nn}`, { sz: 1800, bold: true, color: "1F4E79" }) +
-        run(`    ·    ${lvl}${school}`, { sz: 1600, color: "444444" })
+        run(`    ·    ${lvl}${s.school ?? ""}`, { sz: 1600, color: "444444" })
       , 2);
     }).join("");
     subtitleBody = `<p:txBody><a:bodyPr><a:normAutofit/></a:bodyPr><a:lstStyle/>${lines}</p:txBody>`;
@@ -187,82 +251,78 @@ export async function exportPptx(
     const name = s ? `${s.name ?? ""}${s.nickname ? ` (${s.nickname})` : ""}` : "";
     const level = s?.level ? LEVEL_LABEL[s.level] : "";
     const school = s?.school ?? "";
-    subtitleBody = `<p:txBody><a:bodyPr><a:normAutofit/></a:bodyPr><a:lstStyle/>` +
+    subtitleBody =
+      `<p:txBody><a:bodyPr><a:normAutofit/></a:bodyPr><a:lstStyle/>` +
       p(run(name, { sz: 2200, bold: true, color: "1F4E79" })) +
       (level || school ? p(run([level, school].filter(Boolean).join("  ·  "), { sz: 1800, color: "444444" }), 3) : "") +
       `</p:txBody>`;
   }
 
-  const newSlide1 = replaceSubtitle(slide1Xml, subtitleBody);
-  zip.file("ppt/slides/slide1.xml", newSlide1);
+  zip.file("ppt/slides/slide1.xml", replaceSubtitle(slide1Xml, subtitleBody));
 
-  // ── Report slides ──────────────────────────────────────────────────────────
+  // ── Build report slides ────────────────────────────────────────────────────
   const targetReports = studentId === "ALL"
     ? [...reports].sort((a, b) => a.user.id.localeCompare(b.user.id) || a.date.localeCompare(b.date))
     : reports.filter(r => r.user.id === studentId).sort((a, b) => a.date.localeCompare(b.date));
 
   const showStudent = studentId === "ALL";
 
-  // Remove old slides 2, 3, 4 from zip
-  ["ppt/slides/slide2.xml", "ppt/slides/slide3.xml", "ppt/slides/slide4.xml",
-   "ppt/slides/_rels/slide2.xml.rels", "ppt/slides/_rels/slide3.xml.rels", "ppt/slides/_rels/slide4.xml.rels"]
-    .forEach(path => zip.remove(path));
-
-  // New slide files start at index 6
-  const newSlideNames: string[] = [];
-  targetReports.forEach((r, i) => {
-    const name = `slide${i + 6}`;
-    newSlideNames.push(name);
-    const slideXml = buildReportSlide(slide2Xml, r, showStudent);
-    zip.file(`ppt/slides/${name}.xml`, slideXml);
-    // rels: same layout as slide2
-    zip.file(`ppt/slides/_rels/${name}.xml.rels`, slide2Rels.replace("slide2", name));
+  // Remove old slides 2-4 from zip
+  [2, 3, 4].forEach(n => {
+    zip.remove(`ppt/slides/slide${n}.xml`);
+    zip.remove(`ppt/slides/_rels/slide${n}.xml.rels`);
   });
 
+  // New slides start at index 6
+  const newSlideNames: string[] = [];
+  for (let i = 0; i < targetReports.length; i++) {
+    const name = `slide${i + 6}`;
+    newSlideNames.push(name);
+    const { xml, rels } = await buildReportSlide(slide2Xml, targetReports[i], showStudent, zip, i);
+    zip.file(`ppt/slides/${name}.xml`, xml);
+    zip.file(`ppt/slides/_rels/${name}.xml.rels`, rels);
+  }
+
   // ── Update presentation.xml ────────────────────────────────────────────────
-  // New slide list: slide1, newSlides..., slide5
-  // Assign rIDs: slide1=rId4, new slides=rId20+, slide5=rId8 (keep as is)
   const slideRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
 
-  // Remove old rId5,rId6,rId7 (slides 2,3,4) from presRels
+  // Remove old rId5,6,7 (slides 2,3,4)
   presRels = presRels
     .replace(/<Relationship Id="rId5"[^/]*\/>/g, "")
     .replace(/<Relationship Id="rId6"[^/]*\/>/g, "")
     .replace(/<Relationship Id="rId7"[^/]*\/>/g, "");
 
-  // Add new slide relationships
   const newRelEntries = newSlideNames.map((name, i) =>
     `<Relationship Id="rId${20 + i}" Type="${slideRelType}" Target="slides/${name}.xml"/>`
   ).join("");
   presRels = presRels.replace("</Relationships>", newRelEntries + "</Relationships>");
 
-  // Build new sldIdLst: slide1 (id=256,rId4), new slides (id=400+,rId20+), slide5 (id=335,rId8)
   const newSldIds =
     `<p:sldId id="256" r:id="rId4"/>` +
     newSlideNames.map((_, i) => `<p:sldId id="${400 + i}" r:id="rId${20 + i}"/>`).join("") +
     `<p:sldId id="335" r:id="rId8"/>`;
-
-  presentXml = presentXml.replace(
-    /<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/,
-    `<p:sldIdLst>${newSldIds}</p:sldIdLst>`
-  );
+  presentXml = presentXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${newSldIds}</p:sldIdLst>`);
 
   zip.file("ppt/presentation.xml", presentXml);
   zip.file("ppt/_rels/presentation.xml.rels", presRels);
 
   // ── Update [Content_Types].xml ─────────────────────────────────────────────
-  // Remove old slide2,3,4 overrides, add new ones
   contentTypes = contentTypes
     .replace(/<Override PartName="\/ppt\/slides\/slide2\.xml"[^/]*\/>/g, "")
     .replace(/<Override PartName="\/ppt\/slides\/slide3\.xml"[^/]*\/>/g, "")
     .replace(/<Override PartName="\/ppt\/slides\/slide4\.xml"[^/]*\/>/g, "");
 
-  const newCTEntries = newSlideNames.map(slideContentType).join("");
-  contentTypes = contentTypes.replace("</Types>", newCTEntries + "</Types>");
+  contentTypes = contentTypes.replace(
+    "</Types>",
+    newSlideNames.map(slideContentType).join("") + "</Types>"
+  );
   zip.file("[Content_Types].xml", contentTypes);
 
   // ── Download ───────────────────────────────────────────────────────────────
-  const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  const blob = await zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  });
   const dateStr = new Date().toISOString().slice(0, 10);
   const label = studentId === "ALL" ? "ทั้งหมด" : (students.find(s => s.id === studentId)?.name ?? studentId);
   const a = document.createElement("a");
