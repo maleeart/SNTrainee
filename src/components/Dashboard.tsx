@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import type { Report } from "@prisma/client";
 import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
+import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
@@ -120,7 +121,7 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
           ))}
         </div>
 
-        {tab === "report" && <StudentReportTab stats={myStats} />}
+        {tab === "report" && <StudentReportTab stats={myStats} user={user} reports={reports} />}
 
         {tab === "logs" && <>
         <div className="flex items-center justify-between mb-6">
@@ -296,10 +297,37 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
   );
 }
 
-function StudentReportTab({ stats }: { stats: MyStats }) {
+function StudentReportTab({ stats, user, reports }: { stats: MyStats; user: User; reports: ReportEx[] }) {
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!user.id) return;
+    setExporting(true);
+    try {
+      const reps = reports.map(r => ({
+        ...r,
+        date: r.date instanceof Date ? r.date.toISOString() : String(r.date),
+        user: { id: user.id!, name: user.name ?? null, nickname: user.nickname ?? null, level: user.level ?? null, school: user.school ?? null },
+        evaluations: [],
+      }));
+      await exportPptx(user.id, reps, [{ id: user.id!, name: user.name ?? null, nickname: user.nickname ?? null, level: user.level ?? null, school: user.school ?? null }]);
+    } catch (e) {
+      alert("Export ไม่สำเร็จ: " + (e instanceof Error ? e.message : e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงาน</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-2xl font-bold text-gray-800">รายงาน</h1>
+        <button onClick={handleExport} disabled={exporting || reports.length === 0}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+          style={{ background: "#003E8E" }}>
+          {exporting ? "กำลัง Export..." : "⬇ Export PPTX"}
+        </button>
+      </div>
       <p className="text-gray-500 text-sm mb-6">สรุปความคืบหน้าการฝึกงาน</p>
 
       <div className="grid grid-cols-3 gap-3">
