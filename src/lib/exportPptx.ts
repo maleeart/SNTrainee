@@ -34,9 +34,14 @@ function p(content: string, spacePts = 0) {
   return `<a:p>${spc}${content}</a:p>`;
 }
 
+// Hanging-indent paragraph: label + tab + value, wrapped lines align after the colon
 function labelLine(label: string, value: string, sz = 1600) {
   if (!value?.trim()) return "";
-  return p(run(label, { bold: true, sz, color: "1F4E79" }) + run(value, { sz }), 2);
+  // tab stop at ~1350000 EMU (~1.5") — wide enough for longest Thai label at sz1600
+  const TAB = 1350000;
+  const pPr = `<a:pPr marL="${TAB}" indent="-${TAB}"><a:spcBef><a:spcPts val="200"/></a:spcBef><a:tabLst><a:tab pos="${TAB}" algn="l"/></a:tabLst></a:pPr>`;
+  const tabRun = `<a:r><a:rPr lang="th-TH" sz="${sz}" dirty="0"><a:latin typeface="TH Sarabun New"/><a:cs typeface="TH Sarabun New"/></a:rPr><a:t>&#9;</a:t></a:r>`;
+  return `<a:p>${pPr}${run(label, { bold: true, sz, color: "1F4E79" })}${tabRun}${run(value, { sz })}</a:p>`;
 }
 
 function sectionHeader(label: string) {
@@ -179,33 +184,36 @@ async function buildReportSlide(
   // ── Layout: text box + image shapes ────────────────────────────────────────
   let shapes = "";
   const hasImages = embeddedImages.length > 0;
+  const IMG_GAP = 100000; // gap between images (EMU)
 
   if (!hasImages) {
     // Full-width text
     shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H, body, 10);
   } else if (embeddedImages.length <= 2) {
-    // Text left (56%), images stacked right (40%)
-    const textCx = Math.round(CONTENT_W * 0.56);
-    const imgX = CONTENT_X + textCx + 80000;
-    const imgCx = CONTENT_W - textCx - 80000;
-    const imgH = Math.round(CONTENT_H / 2) - 40000;
+    // Text left ~55%, images stacked right ~42% — with gap between the two sections
+    const textCx = Math.round(CONTENT_W * 0.55);
+    const imgX = CONTENT_X + textCx + IMG_GAP;
+    const imgCx = CONTENT_W - textCx - IMG_GAP; // stays within CONTENT_W bound
+    const n = embeddedImages.length;
+    const imgH = Math.floor((CONTENT_H - (n - 1) * IMG_GAP) / n);
 
     shapes += textBox(CONTENT_X, CONTENT_Y, textCx, CONTENT_H, body, 10);
     embeddedImages.forEach(({ rId }, i) => {
-      const y = CONTENT_Y + i * (imgH + 60000);
+      const y = CONTENT_Y + i * (imgH + IMG_GAP);
       shapes += picShape(rId, imgX, y, imgCx, imgH, 20 + i);
     });
   } else {
-    // Text top, images in row at bottom (max 4 shown)
-    const textCy = Math.round(CONTENT_H * 0.50);
-    const imgY = CONTENT_Y + textCy + 80000;
-    const imgH = CONTENT_H - textCy - 80000;
+    // Text top ~48%, images in a row at bottom — max 4 shown
+    const textCy = Math.round(CONTENT_H * 0.48);
+    const imgY = CONTENT_Y + textCy + IMG_GAP;
     const shown = embeddedImages.slice(0, 4);
-    const imgW = Math.floor(CONTENT_W / shown.length) - 20000;
+    const n = shown.length;
+    const imgW = Math.floor((CONTENT_W - (n - 1) * IMG_GAP) / n);
+    const imgH = CONTENT_H - textCy - IMG_GAP; // fills remaining height
 
     shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, textCy, body, 10);
     shown.forEach(({ rId }, i) => {
-      const x = CONTENT_X + i * (imgW + 20000);
+      const x = CONTENT_X + i * (imgW + IMG_GAP);
       shapes += picShape(rId, x, imgY, imgW, imgH, 20 + i);
     });
   }
