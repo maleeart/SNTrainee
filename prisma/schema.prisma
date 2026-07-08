@@ -85,6 +85,9 @@ model User {
   sessions    Session[]
   reports     Report[]     @relation("StudentReports")
   evaluations Evaluation[] @relation("MentorEvaluations")
+
+  announcementsCreated Announcement[]     @relation("AnnouncementAuthor")
+  announcementReads    AnnouncementRead[] @relation("AnnouncementReads")
 }
 
 model VerificationToken {
@@ -122,6 +125,28 @@ model Report {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String   @db.Text
+  target      String   @default("ALL") // ALL | STUDENT | MENTOR | ADMIN | EXECUTIVE
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  createdById String
+  createdBy   User     @relation("AnnouncementAuthor", fields: [createdById], references: [id])
+  reads       AnnouncementRead[]
+}
+
+model AnnouncementRead {
+  announcementId String
+  userId         String
+  readAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation("AnnouncementReads", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
 }
 
 model Evaluation {

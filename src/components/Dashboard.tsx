@@ -7,7 +7,7 @@ import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
-type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number } };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number; comments: { mentor: string; comment: string }[] } };
 type MyStats = { totalReports: number; scoredReports: number; criteria: Record<string, number>; overall: number | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
@@ -243,7 +243,23 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
                         ))}
                       </div>
                     )}
-                    {r.evalSummary && r.evalSummary.count > 0 && (
+                    {r.evalSummary && r.evalSummary.comments.length > 0 && (
+                      <div className="mt-2.5 rounded-xl overflow-hidden border border-indigo-100">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: "#EEF4FF" }}>
+                          <span className="text-xs">💬</span>
+                          <span className="text-xs font-semibold" style={{ color: "#003E8E" }}>ความเห็นจากพี่เลี้ยง ({r.evalSummary.count} คน)</span>
+                        </div>
+                        <div className="divide-y divide-indigo-50">
+                          {r.evalSummary.comments.map((c, i) => (
+                            <div key={i} className="px-3 py-2 bg-white">
+                              <p className="text-xs font-semibold text-indigo-600 mb-0.5">{c.mentor}</p>
+                              <p className="text-xs text-gray-600 leading-relaxed">{c.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {r.evalSummary && r.evalSummary.count > 0 && r.evalSummary.comments.length === 0 && (
                       <div className="mt-2 inline-flex text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-lg">
                         👥 พี่เลี้ยงประเมินแล้ว {r.evalSummary.count} คน
                       </div>

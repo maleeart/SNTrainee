@@ -16,17 +16,23 @@ export default async function DashboardPage() {
   const rawReports = await prisma.report.findMany({
     where: { userId: u.id },
     orderBy: { date: "desc" },
-    include: { evaluations: { select: { scores: true } } },
+    include: { evaluations: { select: { scores: true, comment: true, mentor: { select: { name: true, nickname: true } } } } },
   });
 
   const reports = rawReports.map(r => {
-    const evals = r.evaluations as { scores: Record<string, number> }[];
-    const evalSummary = { count: evals.length };
+    const evals = r.evaluations as { scores: Record<string, number>; comment: string | null; mentor: { name: string | null; nickname: string | null } }[];
+    const evalSummary = {
+      count: evals.length,
+      comments: evals.filter(e => e.comment?.trim()).map(e => ({
+        mentor: e.mentor.nickname ?? e.mentor.name ?? "พี่เลี้ยง",
+        comment: e.comment!,
+      })),
+    };
     const { evaluations: _, ...rest } = r;
     return { ...rest, evalSummary };
   });
 
-  // Aggregate scores for รายงาน tab
+  // Aggregate scores
   const allEvalScores = rawReports.flatMap(r =>
     (r.evaluations as { scores: Record<string, number> }[])
   );

@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { LEVEL_LABEL, ROLE_LABEL } from "@/lib/labels";
+import AnnouncementBell from "./AnnouncementBell";
 
 type Props = {
   name?: string | null;
@@ -49,6 +50,10 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
             </span>
           )}
         </div>
+
+        {/* Right side: Bell + Avatar */}
+        <div className="flex items-center gap-1">
+        <AnnouncementBell />
 
         {/* Avatar + dropdown */}
         <div className="relative" ref={ref}>
@@ -109,6 +114,7 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
             </div>
           )}
         </div>
+        </div>{/* end right side */}
       </div>
     </nav>
   );

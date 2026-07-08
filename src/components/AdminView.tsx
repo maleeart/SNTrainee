@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
@@ -18,7 +18,7 @@ type Rep = {
   evaluations: EvalRecord[];
 };
 
-type Tab = "overview" | "logs" | "export" | "users";
+type Tab = "overview" | "logs" | "export" | "users" | "announce";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function batchKey(s: U) {
@@ -84,6 +84,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     { id: "logs", label: "บันทึกการฝึกงาน", badge: pending },
     { id: "export", label: "รายงาน" },
     { id: "users", label: "ผู้ใช้งาน" },
+    { id: "announce", label: "ประกาศ" },
   ];
 
   return (
@@ -134,6 +135,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           {tab === "logs" && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
           {tab === "export" && <ExportTab reports={filteredReportsByBatch} students={students} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
+          {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
         </main>
       </div>
       {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
@@ -1236,6 +1238,172 @@ function DR({ label, value }: { label: string; value: string | null | undefined 
     <div className="flex gap-2">
       <span className="text-gray-400 w-24 shrink-0">{label}</span>
       <span className="text-gray-800 font-medium">{value}</span>
+    </div>
+  );
+}
+
+// ─── Announce Tab ─────────────────────────────────────────────────────────────
+
+type AnnItem = { id: string; title: string; body: string; target: string; pinned: boolean; createdAt: string; author: string; read: boolean };
+
+const TARGET_OPTIONS = [
+  { value: "ALL",       label: "ทุกคน" },
+  { value: "STUDENT",   label: "นักศึกษาฝึกงาน" },
+  { value: "MENTOR",    label: "พี่เลี้ยง" },
+  { value: "ADMIN",     label: "ผู้ดูแล" },
+  { value: "EXECUTIVE", label: "ผู้บริหาร" },
+];
+const TARGET_BADGE: Record<string, { bg: string; fg: string }> = {
+  ALL:       { bg: "#EEF4FF", fg: "#003E8E" },
+  STUDENT:   { bg: "#ECFDF5", fg: "#059669" },
+  MENTOR:    { bg: "#FFF7ED", fg: "#C2410C" },
+  ADMIN:     { bg: "#F5F3FF", fg: "#7C3AED" },
+  EXECUTIVE: { bg: "#FEF3C7", fg: "#92400E" },
+};
+
+function AnnounceTab({ readOnly }: { readOnly: boolean }) {
+  const [items, setItems] = useState<AnnItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [target, setTarget] = useState("ALL");
+  const [pinned, setPinned] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const res = await fetch("/api/announcements");
+    if (res.ok) setItems(await res.json());
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const submit = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setSaving(true);
+    const res = await fetch("/api/announcements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, body, target, pinned }),
+    });
+    if (res.ok) {
+      setTitle(""); setBody(""); setTarget("ALL"); setPinned(false);
+      setShowForm(false);
+      await load();
+    }
+    setSaving(false);
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("ลบประกาศนี้?")) return;
+    await fetch(`/api/announcements/${id}`, { method: "DELETE" });
+    setItems(prev => prev.filter(a => a.id !== id));
+  };
+
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="max-w-2xl">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>📢 ประกาศ</h1>
+          <p className="text-sm text-gray-400">ส่งประกาศถึงผู้ใช้งานในระบบ</p>
+        </div>
+        {!readOnly && (
+          <button onClick={() => setShowForm(o => !o)}
+            className="flex items-center gap-1.5 text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-sm"
+            style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>
+            สร้างประกาศ
+          </button>
+        )}
+      </div>
+
+      {/* Create form */}
+      {showForm && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+          <h2 className="text-sm font-bold text-gray-800 mb-4">สร้างประกาศใหม่</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">หัวข้อ *</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="หัวข้อประกาศ"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 mb-1 block">เนื้อหา *</label>
+              <textarea value={body} onChange={e => setBody(e.target.value)} rows={4} placeholder="รายละเอียดประกาศ..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 resize-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">ส่งถึง</label>
+                <select value={target} onChange={e => setTarget(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400 bg-white">
+                  {TARGET_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer pb-2">
+                  <input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} className="w-4 h-4 accent-blue-700" />
+                  <span className="text-sm text-gray-600">📌 ปักหมุด</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={submit} disabled={saving || !title.trim() || !body.trim()}
+                className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>
+                {saving ? "กำลังส่ง..." : "ส่งประกาศ"}
+              </button>
+              <button onClick={() => setShowForm(false)}
+                className="px-5 py-2.5 rounded-xl font-medium text-sm bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {loading ? (
+        <div className="text-center py-12 text-gray-400 text-sm">กำลังโหลด...</div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <div className="text-4xl mb-3">📭</div>
+          <p className="text-sm">ยังไม่มีประกาศ</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map(a => {
+            const badge = TARGET_BADGE[a.target] ?? { bg: "#F3F4F6", fg: "#6B7280" };
+            const targetLabel = TARGET_OPTIONS.find(o => o.value === a.target)?.label ?? a.target;
+            return (
+              <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        {a.pinned && <span className="text-sm">📌</span>}
+                        <h3 className="font-semibold text-gray-800 text-sm">{a.title}</h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ background: badge.bg, color: badge.fg }}>
+                          {targetLabel}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{a.body}</p>
+                      <p className="text-xs text-gray-400 mt-2">{a.author} · {fmtDate(a.createdAt)}</p>
+                    </div>
+                    {!readOnly && (
+                      <button onClick={() => del(a.id)}
+                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg border border-red-100 hover:border-red-300 transition-colors shrink-0">
+                        ลบ
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
