@@ -4,9 +4,8 @@ import { useRef, useEffect, useState, useCallback } from "react";
 
 type Person = { id: string; label: string; isMentor?: boolean };
 
-// On-theme two-tone: navy + ice-blue, gold reserved for the mentor
-const NAVY = "#0A3D8F";
-const ICE = "#DCE9FB";
+// On-theme cool palette (cohesive blues/teal/indigo), gold reserved for the mentor
+const PALETTE = ["#003E8E", "#1557B0", "#2273C9", "#0E6B8F", "#3B4F9E", "#1C88A8"];
 const GOLD = "#FFC000";
 const INK = "#0D1F3C";
 
@@ -41,7 +40,7 @@ function drawWheel(
   people.forEach((p, i) => {
     const start = angle + seg * i - Math.PI / 2;
     const end = start + seg;
-    const fill = p.isMentor ? GOLD : (i % 2 === 0 ? NAVY : ICE);
+    const fill = p.isMentor ? GOLD : PALETTE[i % PALETTE.length];
 
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -54,7 +53,11 @@ function drawWheel(
     ctx.stroke();
   });
 
-  // Labels — upright (flipped on left half), shrink-to-fit
+  // Labels — clipped to the segment area so nothing can cross the gold ring
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+  ctx.clip();
   people.forEach((p, i) => {
     const start = angle + seg * i - Math.PI / 2;
     const mid = start + seg / 2;
@@ -65,17 +68,17 @@ function drawWheel(
     ctx.rotate(flip ? mid + Math.PI : mid);
     ctx.textAlign = flip ? "left" : "right";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = p.isMentor ? INK : (i % 2 === 0 ? "#fff" : INK);
+    ctx.fillStyle = p.isMentor ? INK : "#fff";
 
     const HOLE = 32;
-    const RIM_PAD = 16;
+    const RIM_PAD = 20;
     const maxW = r - HOLE - RIM_PAD;
     const weight = p.isMentor ? "800" : "700";
     let fontSize = n <= 6 ? 17 : n <= 9 ? 15 : n <= 13 ? 13 : n <= 18 ? 12 : 11;
     let label = p.label;
 
     const fits = (fs: number, txt: string) => {
-      ctx.font = `${weight} ${fs}px 'TH Sarabun New', sans-serif`;
+      ctx.font = `${weight} ${fs}px 'TH Sarabun New', 'Tahoma', 'Leelawadee UI', sans-serif`;
       return ctx.measureText(txt).width <= maxW;
     };
     while (fontSize > 9 && !fits(fontSize, label)) fontSize--;
@@ -83,11 +86,12 @@ function drawWheel(
       while (label.length > 2 && !fits(fontSize, label + "…")) label = label.slice(0, -1);
       label = label + "…";
     }
-    ctx.font = `${weight} ${fontSize}px 'TH Sarabun New', sans-serif`;
+    ctx.font = `${weight} ${fontSize}px 'TH Sarabun New', 'Tahoma', 'Leelawadee UI', sans-serif`;
     const x = flip ? -(r - RIM_PAD) : (r - RIM_PAD);
     ctx.fillText(label, x, 0);
     ctx.restore();
   });
+  ctx.restore();   // end label clip
 
   // Center hub — navy disc with gold ring
   ctx.beginPath();
@@ -144,7 +148,16 @@ export default function SpinWheel({ people, onClose, filterSlot }: {
     drawPointer(ctx, SIZE);
   }, [people, SIZE]);
 
-  useEffect(() => { draw(angleRef.current); }, [draw]);
+  useEffect(() => {
+    draw(angleRef.current);
+    // Redraw once the Thai webfont is ready — canvas measureText uses fallback
+    // metrics until then, which mis-sizes Thai labels (they overflow the rim).
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (fonts?.ready) {
+      fonts.load("700 16px 'TH Sarabun New', 'Tahoma'").catch(() => {});
+      fonts.ready.then(() => draw(angleRef.current)).catch(() => {});
+    }
+  }, [draw]);
 
   const spin = useCallback(() => {
     if (spinning || people.length === 0) return;
