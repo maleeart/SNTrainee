@@ -187,11 +187,26 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
                     </div>
                     <h3 className="font-semibold text-gray-800 truncate text-sm">{r.title}</h3>
                     {r.location && <p className="text-xs text-gray-400 mt-0.5">📍 {r.location}</p>}
-                    <p className="text-gray-500 text-xs mt-1 line-clamp-2">{r.description}</p>
-                    {(r.learned || r.solution) && (
+                    <p className="text-gray-500 text-xs mt-1">{r.description}</p>
+                    {(r.learned || r.solution || r.result) && (
                       <div className="mt-1.5 space-y-0.5">
                         {r.learned && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ปัญหา:</span> {r.learned}</p>}
-                        {r.solution && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">แก้ไข:</span> {r.solution}</p>}
+                        {r.solution && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
+                        {r.result && <p className="text-xs text-gray-500"><span className="font-medium text-gray-600">ผลลัพธ์:</span> {r.result}</p>}
+                      </div>
+                    )}
+                    {((r.tools as string[] | null)?.length ?? 0) > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {(r.tools as string[]).map((t, i) => (
+                          <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EEF4FF", color: "#003E8E" }}>🔧 {t}</span>
+                        ))}
+                      </div>
+                    )}
+                    {((r.ppe as string[] | null)?.length ?? 0) > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(r.ppe as string[]).map((t, i) => (
+                          <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F0FDF4", color: "#059669" }}>🦺 {t}</span>
+                        ))}
                       </div>
                     )}
                     {r.evalSummary && r.evalSummary.count > 0 && (
