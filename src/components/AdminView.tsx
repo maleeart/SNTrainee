@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
+import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
 import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
 
@@ -817,10 +818,17 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
           <button onClick={() => exportXlsx(selectedStudentId)}
             className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium text-white whitespace-nowrap"
             style={{ background: "#059669" }}>
-            ⬇ ดาวน์โหลด Excel (.xlsx)
+            ⬇ Excel (.xlsx)
+          </button>
+          <button onClick={() => exportPptx(selectedStudentId, reports, students).catch(e => alert(e.message))}
+            className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg font-medium text-white whitespace-nowrap"
+            style={{ background: "#7C3AED" }}>
+            ⬇ PowerPoint (.pptx)
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-3">เปิดด้วย Microsoft Excel — Sheet 1: สรุปคะแนน · Sheet 2: รายการบันทึกทั้งหมด</p>
+        <p className="text-xs text-gray-400 mt-3">
+          Excel: สรุปคะแนน + รายการบันทึก · PowerPoint: ใช้แบบฟอร์มรายงาน (ข้อมูลส่วนตัว + บันทึกรายงานทีละสไลด์)
+        </p>
       </div>
     </div>
   );
