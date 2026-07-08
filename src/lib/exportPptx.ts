@@ -95,15 +95,51 @@ function avgPerCriteria(evals: Rep["evaluations"]) {
   ]));
 }
 
-// ─── Image fetching ───────────────────────────────────────────────────────────
-async function fetchImageBytes(url: string): Promise<{ data: Uint8Array; ext: string } | null> {
+// ─── Image helpers ────────────────────────────────────────────────────────────
+function parseImageDims(data: Uint8Array, ext: string): { w: number; h: number } {
+  try {
+    if (ext === "png") {
+      // PNG IHDR: bytes 16-19 = width, 20-23 = height (big-endian)
+      const w = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
+      const h = (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23];
+      if (w > 0 && h > 0) return { w, h };
+    } else {
+      // JPEG: scan for SOF0/SOF1/SOF2 marker (FF C0/C1/C2)
+      for (let i = 0; i < data.length - 8; i++) {
+        if (data[i] === 0xff && (data[i + 1] === 0xc0 || data[i + 1] === 0xc1 || data[i + 1] === 0xc2)) {
+          const h = (data[i + 5] << 8) | data[i + 6];
+          const w = (data[i + 7] << 8) | data[i + 8];
+          if (w > 0 && h > 0) return { w, h };
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return { w: 4, h: 3 }; // fallback 4:3
+}
+
+// Fit image into slot maintaining aspect ratio; returns EMU x/y offsets and dims
+function fitInSlot(
+  imgW: number, imgH: number,
+  slotX: number, slotY: number, slotW: number, slotH: number
+): { x: number; y: number; cx: number; cy: number } {
+  const scale = Math.min(slotW / imgW, slotH / imgH);
+  const cx = Math.round(imgW * scale);
+  const cy = Math.round(imgH * scale);
+  const x = slotX + Math.round((slotW - cx) / 2);
+  const y = slotY + Math.round((slotH - cy) / 2);
+  return { x, y, cx, cy };
+}
+
+async function fetchImageBytes(url: string): Promise<{ data: Uint8Array; ext: string; dims: { w: number; h: number } } | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") ?? "";
     const ext = ct.includes("png") ? "png" : "jpg";
     const buf = await res.arrayBuffer();
-    return { data: new Uint8Array(buf), ext };
+    const data = new Uint8Array(buf);
+    const dims = parseImageDims(data, ext);
+    return { data, ext, dims };
   } catch {
     return null;
   }
@@ -126,7 +162,7 @@ async function buildReportSlide(
   const images = r.images ?? [];
 
   // ── Fetch and embed images ─────────────────────────────────────────────────
-  const embeddedImages: { rId: string; ext: string }[] = [];
+  const embeddedImages: { rId: string; ext: string; dims: { w: number; h: number } }[] = [];
   const relEntries: string[] = [
     `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>`,
   ];
@@ -140,7 +176,7 @@ async function buildReportSlide(
     relEntries.push(
       `<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${mediaName}"/>`
     );
-    embeddedImages.push({ rId, ext: img.ext });
+    embeddedImages.push({ rId, ext: img.ext, dims: img.dims });
   }
 
   const rels = `<?xml version="1.0" encoding="utf-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relEntries.join("")}</Relationships>`;
@@ -184,37 +220,54 @@ async function buildReportSlide(
   // ── Layout: text box + image shapes ────────────────────────────────────────
   let shapes = "";
   const hasImages = embeddedImages.length > 0;
-  const IMG_GAP = 100000; // gap between images (EMU)
+  const IMG_GAP = 120000; // gap between images (EMU ~0.13")
+  // Hard bottom limit — must not exceed slide height minus bottom margin
+  const BOTTOM_LIMIT = SLD_H - 250000;
 
   if (!hasImages) {
-    // Full-width text
     shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H, body, 10);
   } else if (embeddedImages.length <= 2) {
-    // Text left ~55%, images stacked right ~42% — with gap between the two sections
-    const textCx = Math.round(CONTENT_W * 0.55);
-    const imgX = CONTENT_X + textCx + IMG_GAP;
-    const imgCx = CONTENT_W - textCx - IMG_GAP; // stays within CONTENT_W bound
+    // Text left ~54%, images stacked right — aspect-ratio fitted, centered in slot
+    const textCx = Math.round(CONTENT_W * 0.54);
+    const imgAreaX = CONTENT_X + textCx + IMG_GAP;
+    const imgAreaW = CONTENT_W - textCx - IMG_GAP;
     const n = embeddedImages.length;
-    const imgH = Math.floor((CONTENT_H - (n - 1) * IMG_GAP) / n);
+    const slotH = Math.floor((CONTENT_H - (n - 1) * IMG_GAP) / n);
 
     shapes += textBox(CONTENT_X, CONTENT_Y, textCx, CONTENT_H, body, 10);
-    embeddedImages.forEach(({ rId }, i) => {
-      const y = CONTENT_Y + i * (imgH + IMG_GAP);
-      shapes += picShape(rId, imgX, y, imgCx, imgH, 20 + i);
+    embeddedImages.forEach(({ rId, dims }, i) => {
+      const slotY = CONTENT_Y + i * (slotH + IMG_GAP);
+      const fit = fitInSlot(dims.w, dims.h, imgAreaX, slotY, imgAreaW, slotH);
+      // Clamp bottom edge
+      if (fit.y + fit.cy > BOTTOM_LIMIT) {
+        const overflow = fit.y + fit.cy - BOTTOM_LIMIT;
+        fit.cy = Math.max(fit.cy - overflow, 100000);
+      }
+      shapes += picShape(rId, fit.x, fit.y, fit.cx, fit.cy, 20 + i);
     });
   } else {
-    // Text top ~48%, images in a row at bottom — max 4 shown
-    const textCy = Math.round(CONTENT_H * 0.48);
-    const imgY = CONTENT_Y + textCy + IMG_GAP;
+    // Text top ~46%, images in a centered row at bottom — max 4, aspect-ratio fitted
+    const textCy = Math.round(CONTENT_H * 0.46);
+    const imgAreaY = CONTENT_Y + textCy + IMG_GAP;
+    const imgAreaH = Math.min(CONTENT_H - textCy - IMG_GAP, BOTTOM_LIMIT - imgAreaY);
     const shown = embeddedImages.slice(0, 4);
     const n = shown.length;
-    const imgW = Math.floor((CONTENT_W - (n - 1) * IMG_GAP) / n);
-    const imgH = CONTENT_H - textCy - IMG_GAP; // fills remaining height
+    const slotW = Math.floor((CONTENT_W - (n - 1) * IMG_GAP) / n);
 
     shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, textCy, body, 10);
-    shown.forEach(({ rId }, i) => {
-      const x = CONTENT_X + i * (imgW + IMG_GAP);
-      shapes += picShape(rId, x, imgY, imgW, imgH, 20 + i);
+
+    // First pass: compute each image's fitted height within its slot
+    // then use the tallest to set uniform row height, re-clamped to imgAreaH
+    const fits = shown.map(({ dims }, i) => {
+      const slotX = CONTENT_X + i * (slotW + IMG_GAP);
+      return fitInSlot(dims.w, dims.h, slotX, imgAreaY, slotW, imgAreaH);
+    });
+    const rowH = Math.min(Math.max(...fits.map(f => f.cy)), imgAreaH);
+
+    shown.forEach(({ rId, dims }, i) => {
+      const slotX = CONTENT_X + i * (slotW + IMG_GAP);
+      const fit = fitInSlot(dims.w, dims.h, slotX, imgAreaY, slotW, rowH);
+      shapes += picShape(rId, fit.x, fit.y, fit.cx, fit.cy, 20 + i);
     });
   }
 
