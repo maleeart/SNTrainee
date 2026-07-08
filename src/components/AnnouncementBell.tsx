@@ -80,10 +80,10 @@ export default function AnnouncementBell() {
         )}
       </button>
 
-      {/* Drawer */}
+      {/* Drawer — viewport-fixed on mobile (avoid left overflow), anchored dropdown on desktop */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[340px] max-w-[calc(100vw-1rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden flex flex-col"
-          style={{ maxHeight: "80vh" }}>
+        <div className="fixed left-2 right-2 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[360px] bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden flex flex-col"
+          style={{ maxHeight: "78vh" }}>
 
           {/* Header */}
           <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"

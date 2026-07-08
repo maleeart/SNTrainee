@@ -55,28 +55,42 @@ function drawWheel(
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Label
+    // Label — radial, right-aligned at rim, extending inward; shrink-to-fit then truncate
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(start + seg / 2);
     ctx.textAlign = "right";
-    ctx.fillStyle = p.isMentor ? "#003E8E" : "rgba(255,255,255,0.95)";
-    const fontSize = n <= 6 ? 15 : n <= 10 ? 13 : 11;
-    ctx.font = `${p.isMentor ? "800" : "600"} ${fontSize}px 'TH Sarabun New', sans-serif`;
-    ctx.shadowColor = "rgba(0,0,0,0.3)";
-    ctx.shadowBlur = 3;
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = p.isMentor ? "#0D1F3C" : "rgba(255,255,255,0.97)";
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 2;
 
-    // Truncate long names
-    const maxW = r * 0.72;
+    const HOLE = 34;           // center hole radius
+    const RIM_PAD = 14;        // gap from rim
+    const maxW = r - HOLE - RIM_PAD;   // available radial length for text
+    const weight = p.isMentor ? "800" : "600";
+    let fontSize = n <= 6 ? 16 : n <= 9 ? 14 : n <= 12 ? 12 : 11;
     let label = p.label;
-    ctx.measureText(label).width > maxW && (label = label.slice(0, 8) + "…");
-    ctx.fillText(label, r - 12, fontSize * 0.38);
+
+    // Shrink font until it fits or hits floor
+    const fits = (fs: number, txt: string) => {
+      ctx.font = `${weight} ${fs}px 'TH Sarabun New', sans-serif`;
+      return ctx.measureText(txt).width <= maxW;
+    };
+    while (fontSize > 9 && !fits(fontSize, label)) fontSize--;
+    // Still too long → truncate with ellipsis
+    if (!fits(fontSize, label)) {
+      while (label.length > 2 && !fits(fontSize, label + "…")) label = label.slice(0, -1);
+      label = label + "…";
+    }
+    ctx.font = `${weight} ${fontSize}px 'TH Sarabun New', sans-serif`;
+    ctx.fillText(label, r - RIM_PAD, 0);
     ctx.restore();
   });
 
   // Center circle
   ctx.beginPath();
-  ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 32, 0, Math.PI * 2);
   ctx.fillStyle = "#0D1F3C";
   ctx.fill();
   ctx.strokeStyle = "#fff";
@@ -111,9 +125,10 @@ function drawPointer(ctx: CanvasRenderingContext2D, size: number) {
   ctx.restore();
 }
 
-export default function SpinWheel({ people, onClose }: {
+export default function SpinWheel({ people, onClose, filterSlot }: {
   people: Person[];
   onClose: () => void;
+  filterSlot?: React.ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const angleRef = useRef(0);
@@ -187,10 +202,13 @@ export default function SpinWheel({ people, onClose }: {
             <p className="text-white/40 text-xs">สุ่มเลือกผู้ลองปฏิบัติงาน</p>
           </div>
         </div>
-        <button onClick={onClose}
-          className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition-colors">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {filterSlot}
+          <button onClick={onClose}
+            className="p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* Wheel area */}

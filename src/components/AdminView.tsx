@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
@@ -87,75 +88,85 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     { id: "announce",  label: "ประกาศ",            icon: <IconMega /> },
   ];
 
+  const activeNav = NAV.find(n => n.id === tab);
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#F0F2F8" }}>
-      {/* AppNav */}
-      <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
+    <div className="md:h-screen md:overflow-hidden flex" style={{ background: "#F0F2F8" }}>
+      {/* Mobile overlay */}
+      {sideOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSideOpen(false)} />}
 
-      <div className="flex flex-1 min-h-0">
-        {/* Mobile overlay */}
-        {sideOpen && <div className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSideOpen(false)} />}
+      {/* ─── Sidebar (full height on desktop, off-canvas drawer on mobile) ─── */}
+      <aside className={`fixed md:static inset-y-0 left-0 z-40 md:z-auto flex-shrink-0 flex flex-col md:h-screen transition-transform duration-250 ease-in-out ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        style={{ width: 236, background: "#0D1F3C" }}>
 
-        {/* Sidebar */}
-        <aside className={`fixed md:static inset-y-0 left-0 z-30 md:z-auto flex-shrink-0 flex flex-col transition-transform duration-250 ease-in-out ${sideOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
-          style={{ width: 232, background: "#0D1F3C", top: 0 }}>
-
-          {/* Sidebar brand header (mobile: always; desktop: below AppNav so hidden by overflow) */}
-          <div className="flex items-center justify-between px-4 h-14 border-b shrink-0 md:hidden"
-            style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-            <span className="font-black italic text-white text-base tracking-wide" style={{ fontFamily: "'Arial Black',sans-serif" }}>กบห-ธ.</span>
-            <button onClick={() => setSideOpen(false)} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
+        {/* Brand header — aligns with AppNav height */}
+        <div className="flex items-center gap-2.5 px-4 h-14 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+            <Image src="/logi.png" alt="กบห-ธ." width={34} height={34} style={{ objectFit: "cover", display: "block" }} />
           </div>
-
-          {/* Nav section label */}
-          <div className="px-4 pt-5 pb-2">
-            <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>เมนูหลัก</p>
+          <div className="leading-tight flex-1 min-w-0">
+            <p className="font-black italic text-white text-sm tracking-wide" style={{ fontFamily: "'Arial Black',sans-serif" }}>กบห-ธ.</p>
+            <p className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>กฟผ. สนง.ไทรน้อย</p>
           </div>
+          <button onClick={() => setSideOpen(false)} className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 md:hidden">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
 
-          {/* Nav items */}
-          <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-            {NAV.map(n => {
-              const active = tab === n.id;
-              return (
-                <button key={n.id} onClick={() => { setTab(n.id); setSideOpen(false); }}
-                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left relative"
-                  style={active
-                    ? { background: "rgba(255,255,255,0.10)", color: "#fff", fontWeight: 700 }
-                    : { color: "rgba(255,255,255,0.5)" }}>
-                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "#FFC000" }} />}
-                  <span className="shrink-0" style={{ color: active ? "#FFC000" : "rgba(255,255,255,0.4)" }}>{n.icon}</span>
-                  <span className="flex-1 truncate">{n.label}</span>
-                  {n.badge ? (
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
-                      style={{ background: "#FFC000", color: "#0D1F3C" }}>
-                      {n.badge}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
+        {/* Nav section label */}
+        <div className="px-4 pt-5 pb-2">
+          <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: "rgba(255,255,255,0.3)" }}>เมนูหลัก</p>
+        </div>
 
-          {/* Sidebar footer */}
-          <div className="px-3 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-            <button onClick={() => router.refresh()}
-              className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm transition-colors"
-              style={{ color: "rgba(255,255,255,0.45)" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.85)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
-              </svg>
-              <span>รีเฟรชข้อมูล</span>
-            </button>
-          </div>
-        </aside>
+        {/* Nav items */}
+        <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+          {NAV.map(n => {
+            const active = tab === n.id;
+            return (
+              <button key={n.id} onClick={() => { setTab(n.id); setSideOpen(false); }}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left relative"
+                style={active
+                  ? { background: "rgba(255,255,255,0.10)", color: "#fff", fontWeight: 700 }
+                  : { color: "rgba(255,255,255,0.5)" }}>
+                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "#FFC000" }} />}
+                <span className="shrink-0" style={{ color: active ? "#FFC000" : "rgba(255,255,255,0.4)" }}>{n.icon}</span>
+                <span className="flex-1 truncate">{n.label}</span>
+                {n.badge ? (
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+                    style={{ background: "#FFC000", color: "#0D1F3C" }}>
+                    {n.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar footer */}
+        <div className="px-3 pb-5 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+          <button onClick={() => router.refresh()}
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm transition-colors"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.85)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+            </svg>
+            <span>รีเฟรชข้อมูล</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ─── Right column: AppNav + scrollable main ─── */}
+      <div className="flex-1 flex flex-col min-w-0 md:h-screen">
+        {/* AppNav confined to content column */}
+        <div className="shrink-0">
+          <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
+        </div>
 
         {/* Mobile hamburger FAB */}
-        <button className="md:hidden fixed bottom-5 left-4 z-10 w-11 h-11 rounded-2xl shadow-lg flex items-center justify-center"
+        <button className="md:hidden fixed bottom-5 left-4 z-20 w-12 h-12 rounded-2xl shadow-lg flex items-center justify-center"
           style={{ background: "#003E8E" }}
           onClick={() => setSideOpen(true)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
@@ -163,16 +174,17 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           </svg>
         </button>
 
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          {/* Topbar inside main */}
-          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-gray-100 px-6 h-12 flex items-center gap-3">
-            <span className="text-sm font-semibold text-gray-800">{NAV.find(n => n.id === tab)?.label}</span>
+        {/* Scrollable content */}
+        <main className="flex-1 md:overflow-auto">
+          {/* Topbar */}
+          <div className="sticky top-0 z-10 border-b border-gray-200/70 px-6 h-12 flex items-center gap-3"
+            style={{ background: "rgba(240,242,248,0.85)", backdropFilter: "blur(8px)" }}>
+            <span className="text-sm font-bold text-gray-800">{activeNav?.label}</span>
             {tab !== "users" && batchKeys.length > 0 && (
               <>
-                <div className="w-px h-4 bg-gray-200" />
+                <div className="w-px h-4 bg-gray-300" />
                 <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white">
+                  className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white shadow-sm">
                   <option value="ALL">ทุกรุ่น</option>
                   {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
                 </select>
@@ -180,7 +192,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             )}
           </div>
 
-          <div className="p-6">
+          <div className="p-5 md:p-6 max-w-6xl mx-auto">
             {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}
             {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}

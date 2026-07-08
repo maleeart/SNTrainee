@@ -293,22 +293,17 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
         const insertAt = Math.floor(Math.random() * (wheelStudents.length + 1));
         const people = [...wheelStudents.slice(0, insertAt), mentorEntry, ...wheelStudents.slice(insertAt)];
 
+        const filterSlot = spinBatchKeys.length > 0 ? (
+          <select value={spinBatchFilter} onChange={e => setSpinBatchFilter(e.target.value)}
+            className="border-0 rounded-xl px-3 py-1.5 text-xs font-medium outline-none"
+            style={{ background: "rgba(255,255,255,0.12)", color: "white" }}>
+            <option value="ALL" style={{ color: "#000" }}>ทุกรุ่น</option>
+            {spinBatchKeys.map(k => <option key={k} value={k} style={{ color: "#000" }}>{spinBatchMap[k]}</option>)}
+          </select>
+        ) : null;
+
         return (
-          <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(13,31,60,0.97)" }}>
-            {/* Batch filter bar at top */}
-            {spinBatchKeys.length > 0 && (
-              <div className="flex items-center gap-2 px-6 pt-4 shrink-0">
-                <span className="text-xs text-white/40 font-semibold">กรองรุ่น:</span>
-                <select value={spinBatchFilter} onChange={e => setSpinBatchFilter(e.target.value)}
-                  className="border-0 rounded-xl px-3 py-1.5 text-xs font-medium"
-                  style={{ background: "rgba(255,255,255,0.1)", color: "white" }}>
-                  <option value="ALL" style={{ color: "#000" }}>ทุกรุ่น</option>
-                  {spinBatchKeys.map(k => <option key={k} value={k} style={{ color: "#000" }}>{spinBatchMap[k]}</option>)}
-                </select>
-              </div>
-            )}
-            <SpinWheel key={spinBatchFilter} people={people} onClose={() => setShowSpin(false)} />
-          </div>
+          <SpinWheel key={spinBatchFilter} people={people} filterSlot={filterSlot} onClose={() => setShowSpin(false)} />
         );
       })()}
 
