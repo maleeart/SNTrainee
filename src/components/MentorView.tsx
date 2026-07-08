@@ -17,9 +17,21 @@ type Rep = {
   location: string | null; tools: string[] | null; ppe: string[] | null; images: string[];
   learned: string | null; solution: string | null; result: string | null;
   status: string; editReason: string | null;
-  user: { name: string | null; nickname: string | null; image: string | null; level: string | null; school: string | null };
+  user: { id: string; name: string | null; nickname: string | null; image: string | null; level: string | null; school: string | null; startDate: string | null; endDate: string | null };
   evaluations: EvalRecord[];
 };
+
+const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+function batchKeyFromDates(start: string | null, end: string | null) {
+  if (!start || !end) return null;
+  return `${start.slice(0, 7)}|${end.slice(0, 7)}`;
+}
+function batchLabelFromKey(key: string, n: number) {
+  const [start, end] = key.split("|");
+  const sm = parseInt(start.split("-")[1]) - 1;
+  const [ey, em] = end.split("-").map(Number);
+  return `รุ่น ${n} (${THAI_MONTHS[sm]} - ${THAI_MONTHS[em - 1]} พ.ศ. ${ey + 543})`;
+}
 
 function avgScores(evals: EvalRecord[]): Record<string, number> {
   if (!evals.length) return {};
@@ -43,11 +55,27 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
   const [tab, setTab] = useState<"pending" | "done" | "all">("pending");
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
   const [editReasonPopup, setEditReasonPopup] = useState<string | null>(null);
+  const [studentFilter, setStudentFilter] = useState("ALL");
+  const [batchFilter, setBatchFilter] = useState("ALL");
 
-  const pending = reports.filter(r => r.evaluations.every(e => e.mentorId !== meId));
-  const done = reports.filter(r => r.evaluations.some(e => e.mentorId === meId));
-  const list = tab === "pending" ? pending : tab === "done" ? done : reports;
-  const pendingCount = pending.filter(r => r.status === "PENDING").length;
+  // Build unique student + batch lists from reports
+  const studentMap = new Map<string, Rep["user"]>();
+  reports.forEach(r => { if (!studentMap.has(r.user.id)) studentMap.set(r.user.id, r.user); });
+  const studentList = [...studentMap.values()];
+
+  const batchKeys = [...new Set(
+    studentList.map(u => batchKeyFromDates(u.startDate, u.endDate)).filter(Boolean) as string[]
+  )].sort();
+  const batchMap = Object.fromEntries(batchKeys.map((k, i) => [k, batchLabelFromKey(k, i + 1)]));
+
+  // Derive filtered reports
+  const byBatch = batchFilter === "ALL" ? reports : reports.filter(r => batchKeyFromDates(r.user.startDate, r.user.endDate) === batchFilter);
+  const byStudent = studentFilter === "ALL" ? byBatch : byBatch.filter(r => r.user.id === studentFilter);
+
+  const pending = byStudent.filter(r => r.evaluations.every(e => e.mentorId !== meId));
+  const done = byStudent.filter(r => r.evaluations.some(e => e.mentorId === meId));
+  const list = tab === "pending" ? pending : tab === "done" ? done : byStudent;
+  const myPendingCount = pending.filter(r => r.status === "PENDING").length;
 
   const onEvalDone = (reportId: string, ev: EvalRecord) => {
     setReports(prev => prev.map(r => {
@@ -61,22 +89,73 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
     setEvalTarget(null);
   };
 
+  // Stat counts (across all filtered reports, not just current tab)
+  const totalStudents = new Set(byStudent.map(r => r.user.id)).size;
+  const myDoneCount = done.length;
+
   return (
     <div className="min-h-screen" style={{ background: "#F4F6FB" }}>
       <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role="MENTOR" profileHref="/profile" />
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">รายงานนักศึกษาฝึกงาน</h1>
-        <p className="text-gray-500 text-sm mb-6">ประเมินให้คะแนนได้ทุกรายงาน — คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
+      <main className="max-w-6xl mx-auto px-4 py-6">
 
-        <div className="flex gap-2 mb-6">
-          <Tab active={tab === "pending"} onClick={() => setTab("pending")}>
-            ยังไม่ประเมิน {pendingCount > 0 && <span className="ml-1 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
-          </Tab>
-          <Tab active={tab === "done"} onClick={() => setTab("done")}>ประเมินแล้ว ({done.length})</Tab>
-          <Tab active={tab === "all"} onClick={() => setTab("all")}>ทั้งหมด ({reports.length})</Tab>
+        {/* Header */}
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-gray-800">รายงานนักศึกษาฝึกงาน</h1>
+          <p className="text-gray-400 text-xs mt-0.5">คะแนนจะถูกเฉลี่ยจากทุกพี่เลี้ยงที่ประเมิน</p>
         </div>
 
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {[
+            { icon: "👩‍🎓", label: "นักศึกษา", value: totalStudents, bg: "#EEF4FF", fg: "#003E8E" },
+            { icon: "📋", label: "รายงานทั้งหมด", value: byStudent.length, bg: "#F0FDF4", fg: "#059669" },
+            { icon: "⏳", label: "รอฉันประเมิน", value: myPendingCount, bg: "#FFFBEB", fg: "#D97706" },
+            { icon: "✅", label: "ฉันประเมินแล้ว", value: myDoneCount, bg: "#F5F3FF", fg: "#7C3AED" },
+          ].map(({ icon, label, value, bg, fg }) => (
+            <div key={label} className="rounded-2xl p-3.5 shadow-sm border border-white" style={{ background: bg }}>
+              <div className="text-lg mb-0.5">{icon}</div>
+              <div className="text-2xl font-bold" style={{ color: fg }}>{value}</div>
+              <div className="text-xs font-medium mt-0.5" style={{ color: fg + "BB" }}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters + Tabs row */}
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          {/* Batch filter */}
+          {batchKeys.length > 0 && (
+            <select value={batchFilter} onChange={e => { setBatchFilter(e.target.value); setStudentFilter("ALL"); }}
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm">
+              <option value="ALL">ทุกรุ่น</option>
+              {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
+            </select>
+          )}
+          {/* Student filter */}
+          <select value={studentFilter} onChange={e => setStudentFilter(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm">
+            <option value="ALL">นักศึกษาทุกคน</option>
+            {studentList
+              .filter(u => batchFilter === "ALL" || batchKeyFromDates(u.startDate, u.endDate) === batchFilter)
+              .map(u => (
+                <option key={u.id} value={u.id}>{u.name}{u.nickname ? ` (${u.nickname})` : ""}</option>
+              ))}
+          </select>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Tab pills */}
+          <div className="flex gap-1.5">
+            <Tab active={tab === "pending"} onClick={() => setTab("pending")}>
+              รอประเมิน{myPendingCount > 0 && <span className="ml-1.5 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full">{myPendingCount}</span>}
+            </Tab>
+            <Tab active={tab === "done"} onClick={() => setTab("done")}>ฉันประเมินแล้ว ({done.length})</Tab>
+            <Tab active={tab === "all"} onClick={() => setTab("all")}>ทั้งหมด ({byStudent.length})</Tab>
+          </div>
+        </div>
+
+        {/* Report list */}
         {list.length === 0 ? (
           <p className="text-center py-20 text-gray-400">ไม่มีรายการ</p>
         ) : (
@@ -84,64 +163,91 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
             {list.map(r => {
               const myEval = r.evaluations.find(e => e.mentorId === meId);
               const avg = avgScores(r.evaluations);
+              const tools = r.tools ?? [];
+              const ppe = r.ppe ?? [];
               return (
-                <div key={r.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+
+                  {/* Card header bar */}
+                  <div className="px-5 py-3 flex items-start justify-between gap-3"
+                    style={{ background: "linear-gradient(135deg,#003E8E,#0052b4)" }}>
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{fmt(r.date)}</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {r.user.image && <img src={r.user.image} className="w-6 h-6 rounded-full ring-1 ring-white/30 shrink-0" alt="" />}
+                        <span className="text-white font-semibold text-sm truncate">{r.user.name}{r.user.nickname ? ` (${r.user.nickname})` : ""}</span>
+                        {r.user.level && <span className="text-blue-200 text-xs shrink-0">{LEVEL_LABEL[r.user.level]}</span>}
+                      </div>
+                      <p className="text-white font-bold leading-snug">{r.title}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        <span className="text-blue-200 text-xs">📅 {fmt(r.date)}</span>
+                        {r.location && <span className="text-blue-200 text-xs">📍 {r.location}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
                         {r.editReason && (
                           <button onClick={() => setEditReasonPopup(r.editReason)}
-                            title="มีการแก้ไขรายงาน"
-                            className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-colors hover:opacity-80"
-                            style={{ background: "#FEF3C7", color: "#92400E" }}>
-                            ✏️ แก้ไขแล้ว
-                          </button>
+                            className="text-xs px-1.5 py-0.5 rounded-full font-medium hover:opacity-80"
+                            style={{ background: "#FEF3C7", color: "#92400E" }}>✏️ แก้ไขแล้ว</button>
                         )}
                         {r.evaluations.length > 0 && (
-                          <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
-                            👥 {r.evaluations.length} พี่เลี้ยงประเมิน · เฉลี่ย {overallAvg(r.evaluations)}
+                          <span className="text-xs bg-white/15 text-white px-2 py-0.5 rounded-full">
+                            👥 {r.evaluations.length} คน · {overallAvg(r.evaluations)}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-                        {r.user.image && <img src={r.user.image} className="w-5 h-5 rounded-full" alt="" />}
-                        <span className="font-medium">{r.user.name}</span>
-                        {r.user.nickname && <span className="text-xs text-gray-500">({r.user.nickname})</span>}
-                        {r.user.level && <span className="text-xs text-gray-400">{LEVEL_LABEL[r.user.level]}</span>}
-                      </div>
-                      <h3 className="font-semibold text-gray-800 mt-1">{r.title}</h3>
-                      {r.location && <p className="text-xs text-gray-400">📍 {r.location}</p>}
-                      <p className="text-gray-500 text-sm mt-1 line-clamp-2">{r.description}</p>
-                      {r.learned && <p className="text-xs text-gray-500 mt-1"><span className="font-medium text-gray-600">ปัญหาที่พบ:</span> {r.learned}</p>}
-                      {r.solution && <p className="text-xs text-gray-500 mt-0.5"><span className="font-medium text-gray-600">วิธีแก้:</span> {r.solution}</p>}
-
-                      {/* Average scores from all mentors */}
-                      {r.evaluations.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {SCORE_CRITERIA.map(c => (
-                            <span key={c.key} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                              {c.label}: {avg[c.key]?.toFixed(1) ?? "-"}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* My eval badge */}
-                      {myEval && (
-                        <div className="mt-2 text-xs bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 text-green-700">
-                          ✓ คุณประเมินแล้ว {myEval.comment && `· "${myEval.comment}"`}
-                        </div>
-                      )}
+                      <button onClick={() => setEvalTarget(r)}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white border border-white/30 hover:bg-white/10"
+                        style={{ background: myEval ? "rgba(99,102,241,0.7)" : "rgba(255,255,255,0.1)" }}>
+                        {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
+                      </button>
                     </div>
+                  </div>
 
-                    <button
-                      onClick={() => setEvalTarget(r)}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium shrink-0 text-white"
-                      style={{ background: myEval ? "#6366f1" : "#003E8E" }}>
-                      {myEval ? "แก้ไขคะแนน" : "ประเมิน"}
-                    </button>
+                  {/* Body */}
+                  <div className="px-5 py-3 space-y-2 text-sm">
+                    <p className="text-gray-600 leading-relaxed">{r.description}</p>
+                    {r.learned && <p className="text-gray-500 text-xs"><span className="font-semibold text-gray-600">ปัญหาที่พบ: </span>{r.learned}</p>}
+                    {r.solution && <p className="text-gray-500 text-xs"><span className="font-semibold text-gray-600">วิธีแก้: </span>{r.solution}</p>}
+                    {r.result && <p className="text-gray-500 text-xs"><span className="font-semibold text-gray-600">ผลลัพธ์: </span>{r.result}</p>}
+
+                    {/* Tools + PPE */}
+                    {(tools.length > 0 || ppe.length > 0) && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {tools.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EEF2FF", color: "#003E8E" }}>🔧 {t}</span>)}
+                        {ppe.map((t, i) => <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FEF9C3", color: "#92400E" }}>🦺 {t}</span>)}
+                      </div>
+                    )}
+
+                    {/* Images */}
+                    {r.images?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {r.images.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" className="h-16 w-16 object-cover rounded-xl border border-gray-200 hover:opacity-80 transition-opacity" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Avg score chips from all mentors */}
+                    {r.evaluations.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {SCORE_CRITERIA.map(c => (
+                          <span key={c.key} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                            {c.label} {avg[c.key]?.toFixed(1) ?? "-"}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* My eval badge */}
+                    {myEval && (
+                      <div className="text-xs bg-green-50 border border-green-100 rounded-xl px-3 py-2 text-green-700">
+                        ✓ คุณประเมินแล้ว{myEval.comment ? ` · "${myEval.comment}"` : ""}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

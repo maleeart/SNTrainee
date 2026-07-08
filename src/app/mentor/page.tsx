@@ -16,7 +16,7 @@ export default async function MentorPage() {
   const reports = await prisma.report.findMany({
     orderBy: [{ status: "asc" }, { date: "desc" }],
     include: {
-      user: { select: { name: true, nickname: true, image: true, level: true, school: true } },
+      user: { select: { id: true, name: true, nickname: true, image: true, level: true, school: true, startDate: true, endDate: true } },
       evaluations: {
         include: { mentor: { select: { id: true, name: true, nickname: true } } },
       },
