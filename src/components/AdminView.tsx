@@ -152,7 +152,38 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
   const scored = reports.filter(r => r.status === "SCORED");
+  const pending = reports.filter(r => r.status === "PENDING");
+
+  // Internship period from students' dates
+  const startDates = students.map(s => s.startDate).filter(Boolean) as string[];
+  const endDates   = students.map(s => s.endDate).filter(Boolean) as string[];
+  const batchStart = startDates.length ? startDates.reduce((a, b) => a < b ? a : b) : null;
+  const batchEnd   = endDates.length   ? endDates.reduce((a, b) => a > b ? a : b)   : null;
+  let daysLeft: number | null = null;
+  let progressPct = 0;
+  if (batchStart && batchEnd) {
+    const s = new Date(batchStart).getTime();
+    const e = new Date(batchEnd).getTime();
+    const t = now.getTime();
+    daysLeft = Math.max(0, Math.ceil((e - t) / 86400000));
+    progressPct = Math.min(100, Math.max(0, Math.round(((t - s) / (e - s)) * 100)));
+  }
+
+  // Students with no report in last 7 days
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+  const inactive = students.filter(s => {
+    const recent = reports.filter(r => r.user.id === s.id && r.date.slice(0, 10) >= sevenDaysAgo);
+    return recent.length === 0;
+  });
+
+  // Recent activity (last 8 reports by date)
+  const recent = [...reports]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+    .slice(0, 8);
 
   const studentStats = students.map(s => {
     const mine = reports.filter(r => r.user.id === s.id);
@@ -161,50 +192,147 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     return { student: s, reportCount: mine.length, evalCount: allEvals.length, avg };
   }).filter(s => s.reportCount > 0);
 
-  return (
-    <div>
-      <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ภาพรวม</h1>
-      <p className="text-sm text-gray-500 mb-6">สรุปข้อมูลการฝึกงาน</p>
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <StatCard label="รายงานทั้งหมด" value={reports.length} />
-        <StatCard label="รอประเมิน" value={reports.filter(r => r.status === "PENDING").length} accent />
-        <StatCard label="ประเมินแล้ว" value={scored.length} />
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold" style={{ color: "#003E8E" }}>ภาพรวม</h1>
+        <p className="text-sm text-gray-400">อัปเดต {new Date().toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
       </div>
 
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { icon: "👩‍🎓", label: "นักศึกษา", value: students.length, bg: "#EEF4FF", fg: "#003E8E" },
+          { icon: "📋", label: "รายงานทั้งหมด", value: reports.length, bg: "#F0FDF4", fg: "#059669" },
+          { icon: "⏳", label: "รอประเมิน", value: pending.length, bg: "#FFFBEB", fg: "#D97706" },
+          { icon: "✅", label: "ประเมินแล้ว", value: scored.length, bg: "#F5F3FF", fg: "#7C3AED" },
+        ].map(({ icon, label, value, bg, fg }) => (
+          <div key={label} className="rounded-2xl p-4 shadow-sm border border-white" style={{ background: bg }}>
+            <div className="text-xl mb-1">{icon}</div>
+            <div className="text-2xl font-bold" style={{ color: fg }}>{value}</div>
+            <div className="text-xs font-medium mt-0.5" style={{ color: fg + "CC" }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Internship progress bar */}
+      {batchStart && batchEnd && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-bold text-gray-800">ระยะเวลาฝึกงาน</p>
+              <p className="text-xs text-gray-400">{fmtDate(batchStart)} – {fmtDate(batchEnd)}</p>
+            </div>
+            <div className="text-right">
+              {daysLeft !== null && daysLeft > 0
+                ? <><p className="text-2xl font-bold" style={{ color: "#003E8E" }}>{daysLeft}</p><p className="text-xs text-gray-400">วันที่เหลือ</p></>
+                : daysLeft === 0
+                  ? <span className="text-sm font-bold text-red-500">สิ้นสุดวันนี้</span>
+                  : <span className="text-sm font-bold text-gray-400">สิ้นสุดแล้ว</span>
+              }
+            </div>
+          </div>
+          <div className="w-full rounded-full h-3 overflow-hidden" style={{ background: "#EEF4FF" }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${progressPct}%`, background: "linear-gradient(90deg,#1a56c4,#003E8E)" }} />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <span>เริ่มแล้ว {progressPct}%</span>
+            <span>เหลือ {100 - progressPct}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Inactive students alert */}
+      {inactive.length > 0 && (
+        <div className="rounded-2xl border p-4" style={{ background: "#FFF7ED", borderColor: "#FED7AA" }}>
+          <p className="text-sm font-bold mb-2" style={{ color: "#C2410C" }}>⚠️ ยังไม่ส่งรายงาน 7 วันที่ผ่านมา ({inactive.length} คน)</p>
+          <div className="flex flex-wrap gap-2">
+            {inactive.map(s => (
+              <span key={s.id} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#FFEDD5", color: "#9A3412" }}>
+                {s.name}{s.nickname ? ` (${s.nickname})` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent activity */}
+      {recent.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-2">
+            <span className="text-base">🕐</span>
+            <h2 className="text-sm font-bold text-gray-800">กิจกรรมล่าสุด</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {recent.map(r => (
+              <div key={r.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5" style={{ background: r.status === "PENDING" ? "#F59E0B" : "#10B981" }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{r.title}</p>
+                  <p className="text-xs text-gray-400">{r.user.name}{r.user.nickname ? ` (${r.user.nickname})` : ""}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-gray-500">{fmtDate(r.date.slice(0, 10))}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Score chart */}
       {studentStats.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-          <h2 className="text-base font-bold mb-1" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษาฝึกงาน</h2>
-          <p className="text-xs text-gray-400 mb-6">เฉลี่ยจากทุกหมวดคะแนน ทุกการประเมิน · สเกล 1–5</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <h2 className="text-sm font-bold mb-0.5" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษาฝึกงาน</h2>
+          <p className="text-xs text-gray-400 mb-6">เฉลี่ยจากทุกหมวดคะแนน · สเกล 1–5</p>
           <ScoreBarChart stats={studentStats} />
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead style={{ background: "#F4F6FB" }}>
-            <tr><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนเฉลี่ย</Th></tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {students.map(s => {
-              const mine = reports.filter(r => r.user.id === s.id);
-              const allEvals = mine.flatMap(r => r.evaluations);
-              const avg = overallAvg(allEvals);
-              return (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <Td>
-                    <span className="font-medium text-gray-800">{s.name}</span>
-                    {s.nickname && <span className="text-xs text-gray-400 ml-1">({s.nickname})</span>}
-                  </Td>
-                  <Td>{s.level ? LEVEL_LABEL[s.level] : "-"}</Td>
-                  <Td>{mine.length}</Td>
-                  <Td>{allEvals.length} ครั้ง</Td>
-                  <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{avg != null ? avg.toFixed(2) : "—"}</span></Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Student summary table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-50">
+          <h2 className="text-sm font-bold text-gray-800">สรุปรายนักศึกษา</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead style={{ background: "#F4F6FB" }}>
+              <tr><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนเฉลี่ย</Th><Th>ล่าสุด</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {students.map(s => {
+                const mine = reports.filter(r => r.user.id === s.id).sort((a, b) => b.date.localeCompare(a.date));
+                const allEvals = mine.flatMap(r => r.evaluations);
+                const avg = overallAvg(allEvals);
+                const lastDate = mine[0]?.date.slice(0, 10);
+                const isInactive = !lastDate || lastDate < sevenDaysAgo;
+                return (
+                  <tr key={s.id} className="hover:bg-gray-50">
+                    <Td>
+                      <span className="font-medium text-gray-800">{s.name}</span>
+                      {s.nickname && <span className="text-xs text-gray-400 ml-1">({s.nickname})</span>}
+                    </Td>
+                    <Td>{s.level ? LEVEL_LABEL[s.level] : "—"}</Td>
+                    <Td>{mine.length}</Td>
+                    <Td>{allEvals.length} ครั้ง</Td>
+                    <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{avg != null ? avg.toFixed(2) : "—"}</span></Td>
+                    <Td>
+                      {lastDate
+                        ? <span className={`text-xs ${isInactive ? "font-semibold" : "text-gray-400"}`} style={isInactive ? { color: "#C2410C" } : {}}>
+                            {fmtDate(lastDate)}{isInactive ? " ⚠️" : ""}
+                          </span>
+                        : <span className="text-xs text-gray-300">—</span>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

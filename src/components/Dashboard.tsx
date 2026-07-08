@@ -157,7 +157,7 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
         </div>
 
         {/* Stat row */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           {[
             { label: "ทั้งหมด", value: myStats.totalReports, color: "#003E8E", bg: "#EEF4FF" },
             { label: "ประเมินแล้ว", value: myStats.scoredReports, color: "#059669", bg: "#ECFDF5" },
@@ -169,6 +169,32 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
             </div>
           ))}
         </div>
+
+        {/* Internship progress bar */}
+        {(() => {
+          if (!user.startDate || !user.endDate) return null;
+          const now = Date.now();
+          const s = new Date(user.startDate).getTime();
+          const e = new Date(user.endDate).getTime();
+          const daysLeft = Math.max(0, Math.ceil((e - now) / 86400000));
+          const pct = Math.min(100, Math.max(0, Math.round(((now - s) / (e - s)) * 100)));
+          const fmtD = (d: string) => new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+          return (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-600">ระยะเวลาฝึกงาน</p>
+                <p className="text-xs text-gray-400">{fmtD(user.startDate)} – {fmtD(user.endDate)}</p>
+              </div>
+              <div className="w-full rounded-full h-2.5 overflow-hidden mb-1" style={{ background: "#EEF4FF" }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg,#1a56c4,#003E8E)" }} />
+              </div>
+              <div className="flex justify-between text-xs" style={{ color: "#6B7280" }}>
+                <span>ผ่านมาแล้ว {pct}%</span>
+                {daysLeft > 0 ? <span style={{ color: "#003E8E", fontWeight: 600 }}>เหลืออีก {daysLeft} วัน</span> : <span className="text-red-500 font-semibold">สิ้นสุดแล้ว</span>}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Report list */}
         {reports.length === 0 ? (
