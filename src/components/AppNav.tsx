@@ -101,7 +101,7 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
                     ✏️ แก้ไขประวัติ
                   </Link>
                 )}
-                <button onClick={() => signOut({ callbackUrl: "/" })}
+                <button onClick={() => signOut({ callbackUrl: "/?relogin=1" })}
                   className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50">
                   ออกจากระบบ
                 </button>

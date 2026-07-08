@@ -1,9 +1,12 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 
 export default function LoginPage() {
+  const params = useSearchParams();
+  const selectAccount = params.get("relogin") === "1";
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-6"
@@ -58,7 +61,7 @@ export default function LoginPage() {
         }}>
           <div className="px-6 pt-5 pb-4">
             <button
-              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" }, selectAccount ? { prompt: "select_account" } : {})}
               className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90 active:scale-95"
               style={{ background: "white", color: "#111" }}
             >
