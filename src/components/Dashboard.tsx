@@ -41,6 +41,7 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reasonPopup, setReasonPopup] = useState(false);
+  const [showEditReason, setShowEditReason] = useState<string | null>(null);
   const [editReason, setEditReason] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -184,6 +185,13 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
                       <span className="text-xs font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{formatDate(r.date)}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                      {r.editReason && (
+                        <button onClick={() => setShowEditReason(r.editReason!)}
+                          className="text-xs px-1.5 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity"
+                          style={{ background: "#FEF3C7", color: "#92400E" }}>
+                          ✏️ แก้ไขแล้ว
+                        </button>
+                      )}
                     </div>
                     <h3 className="font-semibold text-gray-800 truncate text-sm">{r.title}</h3>
                     {r.location && <p className="text-xs text-gray-400 mt-0.5">📍 {r.location}</p>}
@@ -342,6 +350,21 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
               <button onClick={() => setReasonPopup(false)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm">ยกเลิก</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showEditReason && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowEditReason(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">✏️</span>
+              <h3 className="font-bold text-gray-800 text-sm">เหตุผลที่แก้ไขรายงาน</h3>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">{showEditReason}</p>
+            <button onClick={() => setShowEditReason(null)}
+              className="mt-4 w-full py-2.5 rounded-xl font-semibold text-sm text-white"
+              style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>ปิด</button>
           </div>
         </div>
       )}

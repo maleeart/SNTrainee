@@ -16,7 +16,7 @@ type Rep = {
   id: string; date: string; title: string; description: string;
   location: string | null; tools: string[] | null; ppe: string[] | null; images: string[];
   learned: string | null; solution: string | null; result: string | null;
-  status: string;
+  status: string; editReason: string | null;
   user: { name: string | null; nickname: string | null; image: string | null; level: string | null; school: string | null };
   evaluations: EvalRecord[];
 };
@@ -42,6 +42,7 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
   const [reports, setReports] = useState<Rep[]>(initial);
   const [tab, setTab] = useState<"pending" | "done" | "all">("pending");
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
+  const [editReasonPopup, setEditReasonPopup] = useState<string | null>(null);
 
   const pending = reports.filter(r => r.evaluations.every(e => e.mentorId !== meId));
   const done = reports.filter(r => r.evaluations.some(e => e.mentorId === meId));
@@ -90,6 +91,14 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{fmt(r.date)}</span>
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                        {r.editReason && (
+                          <button onClick={() => setEditReasonPopup(r.editReason)}
+                            title="มีการแก้ไขรายงาน"
+                            className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-colors hover:opacity-80"
+                            style={{ background: "#FEF3C7", color: "#92400E" }}>
+                            ✏️ แก้ไขแล้ว
+                          </button>
+                        )}
                         {r.evaluations.length > 0 && (
                           <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
                             👥 {r.evaluations.length} พี่เลี้ยงประเมิน · เฉลี่ย {overallAvg(r.evaluations)}
@@ -148,6 +157,21 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
           onClose={() => setEvalTarget(null)}
           onDone={onEvalDone}
         />
+      )}
+
+      {editReasonPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setEditReasonPopup(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">✏️</span>
+              <h3 className="font-bold text-gray-800">เหตุผลที่แก้ไขรายงาน</h3>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">{editReasonPopup}</p>
+            <button onClick={() => setEditReasonPopup(null)}
+              className="mt-4 w-full py-2.5 rounded-xl font-medium text-sm text-white"
+              style={{ background: "#003E8E" }}>ปิด</button>
+          </div>
+        </div>
       )}
     </div>
   );
