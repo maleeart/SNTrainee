@@ -160,9 +160,16 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
       {/* ─── Right column: AppNav + scrollable main ─── */}
       <div className="flex-1 flex flex-col min-w-0 md:h-screen">
-        {/* AppNav confined to content column */}
+        {/* AppNav confined to content column — brand hidden on desktop (sidebar has it), page title on left */}
         <div className="shrink-0">
-          <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile" />
+          <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile"
+            fullWidth hideBrandDesktop
+            desktopTitle={
+              <div className="flex items-center gap-2.5 text-white">
+                <span style={{ color: "#FFC000" }}>{activeNav?.icon}</span>
+                <span className="font-bold text-base">{activeNav?.label}</span>
+              </div>
+            } />
         </div>
 
         {/* Mobile hamburger FAB */}
@@ -176,21 +183,24 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
         {/* Scrollable content */}
         <main className="flex-1 md:overflow-auto">
-          {/* Topbar */}
-          <div className="sticky top-0 z-10 border-b border-gray-200/70 px-6 h-12 flex items-center gap-3"
-            style={{ background: "rgba(240,242,248,0.85)", backdropFilter: "blur(8px)" }}>
-            <span className="text-sm font-bold text-gray-800">{activeNav?.label}</span>
-            {tab !== "users" && batchKeys.length > 0 && (
-              <>
-                <div className="w-px h-4 bg-gray-300" />
-                <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white shadow-sm">
-                  <option value="ALL">ทุกรุ่น</option>
-                  {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
-                </select>
-              </>
-            )}
-          </div>
+          {/* Context sub-topbar — title on mobile (desktop shows it in AppNav); filter when applicable.
+              Hidden on desktop entirely when there's no filter to show. */}
+          {(() => {
+            const hasFilter = tab !== "users" && batchKeys.length > 0;
+            return (
+              <div className={`sticky top-0 z-10 border-b border-gray-200/70 px-5 md:px-6 h-12 items-center gap-3 ${hasFilter ? "flex" : "flex md:hidden"}`}
+                style={{ background: "rgba(240,242,248,0.85)", backdropFilter: "blur(8px)" }}>
+                <span className="text-sm font-bold text-gray-800 md:hidden">{activeNav?.label}</span>
+                {hasFilter && (
+                  <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white shadow-sm">
+                    <option value="ALL">ทุกรุ่น</option>
+                    {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="p-5 md:p-6 max-w-6xl mx-auto">
             {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}

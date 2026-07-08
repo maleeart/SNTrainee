@@ -19,9 +19,15 @@ type Props = {
   startDate?: string | null;
   endDate?: string | null;
   profileHref?: string;
+  /** Drop the max-width centering so the avatar sits flush to the right edge (app-shell layouts). */
+  fullWidth?: boolean;
+  /** Hide the logo/brand block on desktop (when a sidebar already shows the brand). Still shown on mobile. */
+  hideBrandDesktop?: boolean;
+  /** Content shown on the left of the bar on desktop only (e.g. page title). */
+  desktopTitle?: React.ReactNode;
 };
 
-export default function AppNav({ name, nickname, email, image, role, level, school, advisor, startDate, endDate, profileHref }: Props) {
+export default function AppNav({ name, nickname, email, image, role, level, school, advisor, startDate, endDate, profileHref, fullWidth, hideBrandDesktop, desktopTitle }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,9 +39,9 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
 
   return (
     <nav style={{ background: "#003E8E" }} className="shadow-lg">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5">
+      <div className={`${fullWidth ? "w-full px-4 md:px-6" : "max-w-6xl mx-auto px-4"} h-14 flex items-center justify-between`}>
+        {/* Logo / brand */}
+        <div className={`flex items-center gap-2.5 ${hideBrandDesktop ? "md:hidden" : ""}`}>
           <div style={{ borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
             <Image src="/logi.png" alt="กบห-ธ." width={36} height={36} style={{ objectFit: "cover", display: "block" }} />
           </div>
@@ -51,8 +57,11 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
           )}
         </div>
 
+        {/* Desktop-only left title (app-shell) */}
+        {desktopTitle && <div className="hidden md:flex items-center">{desktopTitle}</div>}
+
         {/* Right side: Bell + Avatar */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 ml-auto">
         <AnnouncementBell />
 
         {/* Avatar + dropdown */}
