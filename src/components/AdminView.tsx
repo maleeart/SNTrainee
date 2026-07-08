@@ -20,6 +20,18 @@ type Rep = {
 
 type Tab = "overview" | "logs" | "export" | "users";
 
+const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+function batchKey(s: U) {
+  if (!s.startDate || !s.endDate) return null;
+  return `${s.startDate.slice(0, 7)}|${s.endDate.slice(0, 7)}`;
+}
+function batchLabel(key: string, n: number) {
+  const [start, end] = key.split("|");
+  const sm = parseInt(start.split("-")[1]) - 1;
+  const [ey, em] = end.split("-").map(Number);
+  return `รุ่น ${n} (${THAI_MONTHS[sm]} - ${THAI_MONTHS[em - 1]} พ.ศ. ${ey + 543})`;
+}
+
 function overallAvg(evals: EvalRecord[]): number | null {
   if (!evals.length) return null;
   const all = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
@@ -37,9 +49,19 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   const [detailUser, setDetailUser] = useState<U | null>(null);
   const [evalTarget, setEvalTarget] = useState<Rep | null>(null);
 
-  const students = users.filter(u => u.role === "STUDENT");
+  const [batchFilter, setBatchFilter] = useState("ALL");
+
+  const allStudents = users.filter(u => u.role === "STUDENT");
   const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
-  const pending = reports.filter(r => r.status === "PENDING").length;
+
+  // Build sorted batch list from students with start/end dates
+  const batchKeys = [...new Set(allStudents.map(s => batchKey(s)).filter(Boolean) as string[])].sort();
+  const batchMap = Object.fromEntries(batchKeys.map((k, i) => [k, batchLabel(k, i + 1)]));
+
+  const students = batchFilter === "ALL" ? allStudents : allStudents.filter(s => batchKey(s) === batchFilter);
+  const studentIds = new Set(students.map(s => s.id));
+  const filteredReportsByBatch = batchFilter === "ALL" ? reports : reports.filter(r => studentIds.has(r.user.id));
+  const pending = filteredReportsByBatch.filter(r => r.status === "PENDING").length;
 
   const onEvalDone = (reportId: string, ev: EvalRecord) => {
     setReports(prev => prev.map(r => {
@@ -98,9 +120,19 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
         </aside>
 
         <main className="flex-1 overflow-auto p-6">
-          {tab === "overview" && <OverviewTab reports={reports} students={students} />}
-          {tab === "logs" && <LogsTab reports={reports} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
-          {tab === "export" && <ExportTab reports={reports} students={students} />}
+          {tab !== "users" && batchKeys.length > 0 && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500">กรองรุ่น:</span>
+              <select value={batchFilter} onChange={e => setBatchFilter(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white shadow-sm">
+                <option value="ALL">ทุกรุ่น</option>
+                {batchKeys.map(k => <option key={k} value={k}>{batchMap[k]}</option>)}
+              </select>
+            </div>
+          )}
+          {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}
+          {tab === "logs" && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
+          {tab === "export" && <ExportTab reports={filteredReportsByBatch} students={students} />}
           {tab === "users" && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
         </main>
       </div>

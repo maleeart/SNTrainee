@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { SCORE_CRITERIA, LEVEL_LABEL, STATUS_LABEL } from "./labels";
+import { LEVEL_LABEL, STATUS_LABEL } from "./labels";
 
 // ─── EMU constants ────────────────────────────────────────────────────────────
 const SLD_W = 12192000;
@@ -8,7 +8,8 @@ const SLD_H = 6858000;
 const CONTENT_X = 457200;   // left margin
 const CONTENT_Y = 1650000;  // below title
 const CONTENT_W = 6800000;  // safe area width (ends before diagonal decoration)
-const CONTENT_H = SLD_H - CONTENT_Y - 200000; // to bottom margin
+const BOTTOM_LIMIT = SLD_H - 600000; // stop above yellow footer bar
+const CONTENT_H = BOTTOM_LIMIT - CONTENT_Y;
 
 // ─── XML helpers ─────────────────────────────────────────────────────────────
 function esc(s: string) {
@@ -87,14 +88,6 @@ type Rep = {
 };
 type U = { id: string; name: string | null; nickname: string | null; level: string | null; school: string | null };
 
-function avgPerCriteria(evals: Rep["evaluations"]) {
-  if (!evals.length) return {} as Record<string, number>;
-  return Object.fromEntries(SCORE_CRITERIA.map(c => [
-    c.key,
-    evals.reduce((s, e) => s + (e.scores[c.key] ?? 0), 0) / evals.length,
-  ]));
-}
-
 // ─── Image helpers ────────────────────────────────────────────────────────────
 function parseImageDims(data: Uint8Array, ext: string): { w: number; h: number } {
   try {
@@ -155,10 +148,6 @@ async function buildReportSlide(
 ): Promise<{ xml: string; rels: string }> {
   const tools = r.tools ?? [];
   const ppe = r.ppe ?? [];
-  const evals = r.evaluations ?? [];
-  const criteria = avgPerCriteria(evals);
-  const allNums = evals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
-  const overall = allNums.length ? allNums.reduce((a, b) => a + b, 0) / allNums.length : null;
   const images = r.images ?? [];
 
   // ── Fetch and embed images ─────────────────────────────────────────────────
@@ -207,22 +196,10 @@ async function buildReportSlide(
   if (ppe.length)
     body += p(run("อุปกรณ์ป้องกัน: ", { bold: true, sz: 1500, color: "1F4E79" }) + run(ppe.join(", "), { sz: 1500 }), 1);
 
-  if (evals.length > 0 && overall != null) {
-    body += p(
-      run("ผลการประเมิน: ", { bold: true, sz: 1500, color: "1F4E79" }) +
-      run(`${evals.length} คน · เฉลี่ย ${overall.toFixed(2)}/5.00`, { sz: 1500, color: "444444" }),
-      4
-    );
-    const scoreStr = SCORE_CRITERIA.map(c => criteria[c.key] != null ? `${c.label} ${criteria[c.key].toFixed(1)}` : null).filter(Boolean).join("  ·  ");
-    if (scoreStr) body += p(run(scoreStr, { sz: 1300, color: "666666", italic: true }), 1);
-  }
-
   // ── Layout: text box + image shapes ────────────────────────────────────────
   let shapes = "";
   const hasImages = embeddedImages.length > 0;
   const IMG_GAP = 120000; // gap between images (EMU ~0.13")
-  // Hard bottom limit — must not exceed slide height minus bottom margin
-  const BOTTOM_LIMIT = SLD_H - 250000;
 
   if (!hasImages) {
     shapes += textBox(CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H, body, 10);
