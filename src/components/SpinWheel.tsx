@@ -4,13 +4,11 @@ import { useRef, useEffect, useState, useCallback } from "react";
 
 type Person = { id: string; label: string; isMentor?: boolean };
 
-const PALETTE = [
-  "#003E8E","#1a56c4","#2563eb","#1d4ed8","#0052a3",
-  "#7C3AED","#6D28D9","#5B21B6",
-  "#059669","#047857","#065f46",
-  "#B45309","#92400E","#78350f",
-  "#C2410C","#9A3412","#7c2d12",
-];
+// On-theme two-tone: navy + ice-blue, gold reserved for the mentor
+const NAVY = "#0A3D8F";
+const ICE = "#DCE9FB";
+const GOLD = "#FFC000";
+const INK = "#0D1F3C";
 
 function easeOut(t: number) { return 1 - Math.pow(1 - t, 4); }
 
@@ -21,20 +19,21 @@ function drawWheel(
   size: number,
 ) {
   const cx = size / 2, cy = size / 2;
-  const r = size / 2 - 6;
+  const R = size / 2 - 3;       // gold ring outer edge
+  const r = size / 2 - 15;      // segment radius (gold ring shows between r and R)
   const n = people.length;
   if (n === 0) return;
   const seg = (Math.PI * 2) / n;
 
   ctx.clearRect(0, 0, size, size);
 
-  // Shadow under wheel
+  // Gold outer ring
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.18)";
-  ctx.shadowBlur = 24;
+  ctx.shadowColor = "rgba(0,0,0,0.28)";
+  ctx.shadowBlur = 22;
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = GOLD;
   ctx.fill();
   ctx.restore();
 
@@ -42,82 +41,81 @@ function drawWheel(
   people.forEach((p, i) => {
     const start = angle + seg * i - Math.PI / 2;
     const end = start + seg;
-    const color = p.isMentor ? "#FFC000" : PALETTE[i % PALETTE.length];
+    const fill = p.isMentor ? GOLD : (i % 2 === 0 ? NAVY : ICE);
 
-    // Segment fill
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, start, end);
     ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.fillStyle = fill;
     ctx.fill();
     ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.stroke();
+  });
 
-    // Label — radial, right-aligned at rim, extending inward; shrink-to-fit then truncate
+  // Labels — upright (flipped on left half), shrink-to-fit
+  people.forEach((p, i) => {
+    const start = angle + seg * i - Math.PI / 2;
+    const mid = start + seg / 2;
+    const flip = Math.cos(mid) < 0;   // pointing to the left half → rotate 180° to stay upright
+
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(start + seg / 2);
-    ctx.textAlign = "right";
+    ctx.rotate(flip ? mid + Math.PI : mid);
+    ctx.textAlign = flip ? "left" : "right";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = p.isMentor ? "#0D1F3C" : "rgba(255,255,255,0.97)";
-    ctx.shadowColor = "rgba(0,0,0,0.25)";
-    ctx.shadowBlur = 2;
+    ctx.fillStyle = p.isMentor ? INK : (i % 2 === 0 ? "#fff" : INK);
 
-    const HOLE = 34;           // center hole radius
-    const RIM_PAD = 14;        // gap from rim
-    const maxW = r - HOLE - RIM_PAD;   // available radial length for text
-    const weight = p.isMentor ? "800" : "600";
-    let fontSize = n <= 6 ? 16 : n <= 9 ? 14 : n <= 12 ? 12 : 11;
+    const HOLE = 32;
+    const RIM_PAD = 16;
+    const maxW = r - HOLE - RIM_PAD;
+    const weight = p.isMentor ? "800" : "700";
+    let fontSize = n <= 6 ? 17 : n <= 9 ? 15 : n <= 13 ? 13 : n <= 18 ? 12 : 11;
     let label = p.label;
 
-    // Shrink font until it fits or hits floor
     const fits = (fs: number, txt: string) => {
       ctx.font = `${weight} ${fs}px 'TH Sarabun New', sans-serif`;
       return ctx.measureText(txt).width <= maxW;
     };
     while (fontSize > 9 && !fits(fontSize, label)) fontSize--;
-    // Still too long → truncate with ellipsis
     if (!fits(fontSize, label)) {
       while (label.length > 2 && !fits(fontSize, label + "…")) label = label.slice(0, -1);
       label = label + "…";
     }
     ctx.font = `${weight} ${fontSize}px 'TH Sarabun New', sans-serif`;
-    ctx.fillText(label, r - RIM_PAD, 0);
+    const x = flip ? -(r - RIM_PAD) : (r - RIM_PAD);
+    ctx.fillText(label, x, 0);
     ctx.restore();
   });
 
-  // Center circle
+  // Center hub — navy disc with gold ring
   ctx.beginPath();
-  ctx.arc(cx, cy, 32, 0, Math.PI * 2);
-  ctx.fillStyle = "#0D1F3C";
+  ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+  ctx.fillStyle = INK;
   ctx.fill();
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = GOLD;
   ctx.stroke();
-
-  // Center icon
-  ctx.font = "bold 16px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#FFC000";
-  ctx.fillText("🎡", cx, cy);
+  // small gold dot in the very center
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.fillStyle = GOLD;
+  ctx.fill();
 }
 
 function drawPointer(ctx: CanvasRenderingContext2D, size: number) {
   const cx = size / 2;
-  const r = size / 2 - 6;
-  // Triangle pointing down into the wheel from the top
+  // Small triangle at the top, pointing DOWN into the wheel
   ctx.save();
   ctx.beginPath();
-  ctx.moveTo(cx, r + 2);
-  ctx.lineTo(cx - 13, -4);
-  ctx.lineTo(cx + 13, -4);
+  ctx.moveTo(cx, 26);          // apex (points into wheel)
+  ctx.lineTo(cx - 12, 0);
+  ctx.lineTo(cx + 12, 0);
   ctx.closePath();
-  ctx.fillStyle = "#FFC000";
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 6;
+  ctx.fillStyle = GOLD;
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 5;
   ctx.fill();
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 2;
@@ -174,14 +172,14 @@ export default function SpinWheel({ people, onClose, filterSlot }: {
         angleRef.current = targetAngle % (Math.PI * 2);
         setSpinning(false);
 
-        // Determine winner: pointer is at top (–π/2 from canvas zero)
-        // Segment i starts at: angle + seg*i - π/2
-        // After full rotation, the pointer at angle 0 (top of canvas)
-        // sits at relative angle: (0 - (angleRef.current - π/2) ) mod 2π
+        // Winner = segment under the top pointer (canvas angle -π/2).
+        // Segment i spans [angle - π/2 + seg*i, +seg); solving for the segment
+        // containing -π/2 gives idx = floor( ((-angle) mod 2π) / seg ).
+        const twoPi = Math.PI * 2;
         const n = people.length;
-        const seg = (Math.PI * 2) / n;
-        const norm = ((Math.PI / 2 - (angleRef.current % (Math.PI * 2))) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-        const idx = Math.floor(norm / seg) % n;
+        const seg = twoPi / n;
+        const phi = ((-angleRef.current % twoPi) + twoPi) % twoPi;
+        const idx = Math.floor(phi / seg) % n;
         setWinner(people[idx]);
       }
     };
