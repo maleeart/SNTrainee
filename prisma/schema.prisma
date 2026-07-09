@@ -88,6 +88,10 @@ model User {
 
   announcementsCreated Announcement[]     @relation("AnnouncementAuthor")
   announcementReads    AnnouncementRead[] @relation("AnnouncementReads")
+
+  coursesCreated Course[]         @relation("CourseAuthor")
+  lessonProgress LessonProgress[] @relation("LessonProgress")
+  quizAttempts   QuizAttempt[]    @relation("QuizAttempts")
 }
 
 model VerificationToken {
@@ -147,6 +151,61 @@ model AnnouncementRead {
   user           User         @relation("AnnouncementReads", fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([announcementId, userId])
+}
+
+model Course {
+  id          String         @id @default(cuid())
+  title       String
+  description String?        @db.Text
+  emoji       String         @default("📋")
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+  createdById String
+  createdBy   User           @relation("CourseAuthor", fields: [createdById], references: [id])
+  lessons     CourseLesson[]
+}
+
+model CourseLesson {
+  id       String  @id @default(cuid())
+  courseId String
+  course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String
+  order    Int     @default(0)
+  videoUrl String?
+  fileUrl  String?
+  fileName String?
+  quiz     LessonQuiz?
+  progress LessonProgress[]
+}
+
+model LessonQuiz {
+  id        String       @id @default(cuid())
+  lessonId  String       @unique
+  lesson    CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  passScore Int          @default(70)
+  questions Json         // [{q, options:[string,string,string,string], answer:0-3}]
+  attempts  QuizAttempt[]
+}
+
+model LessonProgress {
+  userId      String
+  lessonId    String
+  completedAt DateTime     @default(now())
+  user        User         @relation("LessonProgress", fields: [userId], references: [id], onDelete: Cascade)
+  lesson      CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  @@id([userId, lessonId])
+}
+
+model QuizAttempt {
+  id        String     @id @default(cuid())
+  userId    String
+  quizId    String
+  score     Int
+  passed    Boolean
+  answers   Json
+  createdAt DateTime   @default(now())
+  user      User       @relation("QuizAttempts", fields: [userId], references: [id], onDelete: Cascade)
+  quiz      LessonQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
 }
 
 model Evaluation {

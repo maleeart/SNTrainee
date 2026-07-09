@@ -1,0 +1,38 @@
+import { requireUser } from "@/lib/guards";
+import { prisma } from "@/lib/prisma";
+import TrainingView from "@/components/TrainingView";
+
+export default async function TrainingPage() {
+  const u = await requireUser();
+  const uid = u.id;
+
+  const courses = await prisma.course.findMany({
+    orderBy: { order: "asc" },
+    include: {
+      lessons: {
+        orderBy: { order: "asc" },
+        include: {
+          progress: { where: { userId: uid } },
+          quiz: { include: { attempts: { where: { userId: uid }, orderBy: { score: "desc" }, take: 1 } } }
+        }
+      }
+    }
+  });
+
+  const data = courses.map(c => ({
+    id: c.id, title: c.title, description: c.description, emoji: c.emoji, order: c.order,
+    lessons: c.lessons.map(l => ({
+      id: l.id, title: l.title, order: l.order,
+      videoUrl: l.videoUrl, fileUrl: l.fileUrl, fileName: l.fileName,
+      completed: l.progress.length > 0 || (l.quiz?.attempts[0]?.passed ?? false),
+      quiz: l.quiz ? {
+        id: l.quiz.id, passScore: l.quiz.passScore,
+        questions: l.quiz.questions as { q: string; options: string[]; answer: number }[],
+        bestScore: l.quiz.attempts[0]?.score ?? null,
+        passed: l.quiz.attempts[0]?.passed ?? false,
+      } : null
+    }))
+  }));
+
+  return <TrainingView initCourses={data} meId={uid} meRole={u.role} meName={u.name ?? ""} meImage={u.image ?? null} />;
+}

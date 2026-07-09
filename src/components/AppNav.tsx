@@ -60,8 +60,17 @@ export default function AppNav({ name, nickname, email, image, role, level, scho
         {/* Desktop-only left title (app-shell) */}
         {desktopTitle && <div className="hidden md:flex items-center">{desktopTitle}</div>}
 
-        {/* Right side: Bell + Avatar */}
+        {/* Right side: Training + Bell + Avatar */}
         <div className="flex items-center gap-1 ml-auto">
+        <a href="/training" title="เนื้อหาอบรม"
+          className="p-2 rounded-xl transition-colors"
+          style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.7)" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#fff"; (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.1)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.7)"; (e.currentTarget as HTMLAnchorElement).style.background = ""; }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+        </a>
         <AnnouncementBell />
 
         {/* Avatar + dropdown */}
