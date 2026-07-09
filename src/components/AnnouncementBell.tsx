@@ -52,12 +52,22 @@ export default function AnnouncementBell() {
     setItems(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
   };
 
-  const markAllRead = async (list = items) => {
-    const unread = list.filter(a => !a.read);
+  const markAllRead = async () => {
+    const unread = items.filter(a => !a.read);
     if (!unread.length) return;
-    await Promise.all(unread.map(a => fetch(`/api/announcements/${a.id}`, { method: "POST" })));
     setItems(prev => prev.map(a => ({ ...a, read: true })));
+    await Promise.all(unread.map(a => fetch(`/api/announcements/${a.id}`, { method: "POST" })));
   };
+
+  // mark all read whenever bell opens (items is always fresh here)
+  useEffect(() => {
+    if (!open) return;
+    const unread = items.filter(a => !a.read);
+    if (!unread.length) return;
+    setItems(prev => prev.map(a => ({ ...a, read: true })));
+    unread.forEach(a => fetch(`/api/announcements/${a.id}`, { method: "POST" }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const unreadCount = items.filter(a => !a.read).length;
 
@@ -65,7 +75,7 @@ export default function AnnouncementBell() {
     <div className="relative" ref={drawerRef}>
       {/* Bell button */}
       <button
-        onClick={() => { setOpen(o => { if (!o) markAllRead(); return !o; }); }}
+        onClick={() => setOpen(o => !o)}
         className="relative p-2 rounded-xl transition-colors hover:bg-white/10"
         aria-label="ประกาศ"
       >
