@@ -1647,125 +1647,330 @@ type AttendanceLeave = {
   user: { id: string; name: string | null; nickname: string | null };
 };
 
+type MonthlyCheckIn = { userId: string; date: string };
+type MonthlyLeave = { id: string; userId: string; startDate: string; endDate: string; reason: string; user: { id: string; name: string | null; nickname: string | null } };
+type MonthlyData = { students: { id: string; name: string | null; nickname: string | null; startDate: string | null; endDate: string | null }[]; checkIns: MonthlyCheckIn[]; leaves: MonthlyLeave[] };
+
+function statusLabel(s: "มา" | "ลา" | "ขาด") {
+  return s === "มา" ? "✅ มา" : s === "ลา" ? "📋 ลา" : "❌ ขาด";
+}
+function statusStyle(s: "มา" | "ลา" | "ขาด") {
+  return s === "มา" ? { bg: "#DCFCE7", color: "#16A34A" }
+    : s === "ลา" ? { bg: "#FEF3C7", color: "#D97706" }
+    : { bg: "#FEE2E2", color: "#DC2626" };
+}
+
 function AttendanceTab() {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const thisMonth = today.slice(0, 7);
+
+  const [view, setView] = useState<"daily" | "monthly">("daily");
+
+  // ── Daily state ──────────────────────────────────────────────────────────────
   const [date, setDate] = useState(today);
-  const [data, setData] = useState<{ students: AttendanceStudent[]; leaves: AttendanceLeave[] } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dailyData, setDailyData] = useState<{ students: AttendanceStudent[]; leaves: AttendanceLeave[] } | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [editing, setEditing] = useState<string | null>(null); // userId being edited
+  const [saving, setSaving] = useState(false);
   const [leaveView, setLeaveView] = useState<"today" | "all">("today");
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/attendance?date=${date}`)
-      .then(r => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [date]);
-
-  const fmtDate = (s: string) => {
-    const d = new Date(s);
-    return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  const loadDaily = (d: string) => {
+    setDailyLoading(true);
+    fetch(`/api/attendance?date=${d}`).then(r => r.json()).then(setDailyData).finally(() => setDailyLoading(false));
   };
+  useEffect(() => { loadDaily(date); }, [date]);
+
+  const changeStatus = async (userId: string, currentStatus: string) => {
+    if (currentStatus === "ลา") return; // leave-managed, can't override here
+    const action = currentStatus === "มา" ? "uncheckin" : "checkin";
+    setSaving(true);
+    await fetch("/api/attendance", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, date, action }) });
+    setSaving(false);
+    setEditing(null);
+    loadDaily(date);
+  };
+
+  // ── Monthly state ─────────────────────────────────────────────────────────────
+  const [month, setMonth] = useState(thisMonth);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+
+  useEffect(() => {
+    if (view !== "monthly") return;
+    setMonthlyLoading(true);
+    fetch(`/api/attendance?month=${month}`).then(r => r.json()).then(setMonthlyData).finally(() => setMonthlyLoading(false));
+  }, [month, view]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const fmtDate = (s: string) => new Date(s).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
   const fmtTime = (s: string) => new Date(s).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
-  const statusStyle = (s: string) =>
-    s === "มา" ? { bg: "#DCFCE7", color: "#16A34A", label: "✅ มา" }
-    : s === "ลา" ? { bg: "#FEF3C7", color: "#D97706", label: "📋 ลา" }
-    : { bg: "#FEE2E2", color: "#DC2626", label: "❌ ขาด" };
+  // ── Monthly helpers ───────────────────────────────────────────────────────────
+  function daysInMonth(ym: string) {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m, 0).getDate();
+  }
 
-  const todayLeaves = data?.leaves.filter(l => {
-    const s = new Date(l.startDate), e = new Date(l.endDate), d = new Date(date);
-    return s <= d && d <= e;
-  }) ?? [];
-  const displayedLeaves = leaveView === "today" ? todayLeaves : (data?.leaves ?? []);
+  function getDayStatus(data: MonthlyData, userId: string, dayStr: string): "มา" | "ลา" | "ขาด" {
+    const d = new Date(dayStr);
+    const onLeave = data.leaves.some(l => l.userId === userId && new Date(l.startDate) <= d && d <= new Date(l.endDate));
+    if (onLeave) return "ลา";
+    const checkedIn = data.checkIns.some(c => c.userId === userId && c.date.slice(0, 10) === dayStr);
+    return checkedIn ? "มา" : "ขาด";
+  }
 
+  const exportMonthly = () => {
+    if (!monthlyData) return;
+    const [y, m] = month.split("-").map(Number);
+    const days = daysInMonth(month);
+    const dayNums = Array.from({ length: days }, (_, i) => i + 1);
+
+    // Build rows
+    const headerRow = ["ชื่อ-สกุล", "ชื่อเล่น", ...dayNums.map(d => String(d)), "มา", "ลา", "ขาด"];
+    const dataRows = monthlyData.students.map(s => {
+      const counts = { มา: 0, ลา: 0, ขาด: 0 };
+      const dayCells = dayNums.map(d => {
+        const dayStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const st = getDayStatus(monthlyData, s.id, dayStr);
+        counts[st]++;
+        return st === "มา" ? "✓" : st === "ลา" ? "ลา" : "×";
+      });
+      return [s.name ?? "", s.nickname ?? "", ...dayCells, counts.มา, counts.ลา, counts.ขาด];
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+    // Column widths
+    ws["!cols"] = [{ wch: 22 }, { wch: 12 }, ...dayNums.map(() => ({ wch: 4 })), { wch: 5 }, { wch: 5 }, { wch: 5 }];
+    const wb = XLSX.utils.book_new();
+    const monthLabel = new Date(`${month}-01`).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+    XLSX.utils.book_append_sheet(wb, ws, `เข้างาน ${monthLabel}`);
+    XLSX.writeFile(wb, `attendance_${month}.xlsx`);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* Date picker */}
+    <div className="space-y-5">
+      {/* Header + view toggle */}
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-lg font-bold text-gray-800">บันทึกลงเวลา</h2>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} max={today}
-          className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm" />
-        {date !== today && (
-          <button onClick={() => setDate(today)} className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50">วันนี้</button>
-        )}
+        <h2 className="text-lg font-bold text-gray-800 flex-1">บันทึกลงเวลา</h2>
+        <div className="flex rounded-xl overflow-hidden border border-gray-200 text-sm">
+          {(["daily", "monthly"] as const).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className="px-4 py-1.5 transition-colors"
+              style={view === v ? { background: "#003E8E", color: "#fff" } : { color: "#6B7280" }}>
+              {v === "daily" ? "รายวัน" : "รายเดือน"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Attendance table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-          <p className="font-semibold text-gray-700 text-sm">การเข้างาน — {fmtDate(date)}</p>
-          {!loading && data && (
-            <div className="flex gap-3 text-xs">
-              <span style={{ color: "#16A34A" }}>มา {data.students.filter(s => s.status === "มา").length}</span>
-              <span style={{ color: "#D97706" }}>ลา {data.students.filter(s => s.status === "ลา").length}</span>
-              <span style={{ color: "#DC2626" }}>ขาด {data.students.filter(s => s.status === "ขาด").length}</span>
+      {/* ── DAILY VIEW ── */}
+      {view === "daily" && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} max={today}
+              className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm" />
+            {date !== today && (
+              <button onClick={() => setDate(today)} className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50">วันนี้</button>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <p className="font-semibold text-gray-700 text-sm">การเข้างาน — {fmtDate(date)}</p>
+              {!dailyLoading && dailyData && (
+                <div className="flex gap-3 text-xs">
+                  <span style={{ color: "#16A34A" }}>มา {dailyData.students.filter(s => s.status === "มา").length}</span>
+                  <span style={{ color: "#D97706" }}>ลา {dailyData.students.filter(s => s.status === "ลา").length}</span>
+                  <span style={{ color: "#DC2626" }}>ขาด {dailyData.students.filter(s => s.status === "ขาด").length}</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        {loading ? (
-          <div className="py-10 text-center text-gray-400 text-sm">กำลังโหลด...</div>
-        ) : !data?.students.length ? (
-          <div className="py-10 text-center text-gray-400 text-sm">ไม่มีนักศึกษา</div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {data.students.map(s => {
-              const st = statusStyle(s.status);
-              return (
-                <div key={s.id} className="flex items-center gap-3 px-5 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{s.nickname ?? s.name ?? "—"}</p>
-                    {s.name && s.nickname && <p className="text-xs text-gray-400">{s.name}</p>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {s.status === "มา" && s.checkInTime && (
-                      <span className="text-xs text-gray-400">{fmtTime(s.checkInTime)}</span>
-                    )}
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                      style={{ background: st.bg, color: st.color }}>
-                      {st.label}
-                    </span>
-                  </div>
+            {dailyLoading ? (
+              <div className="py-10 text-center text-gray-400 text-sm">กำลังโหลด...</div>
+            ) : !dailyData?.students.length ? (
+              <div className="py-10 text-center text-gray-400 text-sm">ไม่มีนักศึกษา</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {dailyData.students.map(s => {
+                  const st = statusStyle(s.status as "มา" | "ลา" | "ขาด");
+                  const isEditing = editing === s.id;
+                  return (
+                    <div key={s.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{s.nickname ?? s.name ?? "—"}</p>
+                        {s.name && s.nickname && <p className="text-xs text-gray-400">{s.name}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {s.status === "มา" && s.checkInTime && (
+                          <span className="text-xs text-gray-400">{fmtTime(s.checkInTime)}</span>
+                        )}
+                        {isEditing ? (
+                          <div className="flex gap-1">
+                            {s.status !== "ลา" && (
+                              <>
+                                <button disabled={saving} onClick={() => changeStatus(s.id, s.status)}
+                                  className="text-xs px-2.5 py-1 rounded-lg font-semibold border transition-colors disabled:opacity-40"
+                                  style={s.status === "ขาด" ? { background: "#DCFCE7", color: "#16A34A", borderColor: "#16A34A" } : { background: "#FEE2E2", color: "#DC2626", borderColor: "#DC2626" }}>
+                                  {saving ? "..." : s.status === "ขาด" ? "บันทึกมา" : "ลบการมา"}
+                                </button>
+                                <button onClick={() => setEditing(null)} className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-400">✕</button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: st.bg, color: st.color }}>
+                              {statusLabel(s.status as "มา" | "ลา" | "ขาด")}
+                            </span>
+                            {s.status !== "ลา" && (
+                              <button onClick={() => setEditing(s.id)} className="text-xs text-gray-400 hover:text-gray-600 px-1">✏️</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Leave requests */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+              <p className="font-semibold text-gray-700 text-sm flex-1">คำขอลา</p>
+              {(["today", "all"] as const).map(v => (
+                <button key={v} onClick={() => setLeaveView(v)}
+                  className="text-xs px-3 py-1 rounded-full transition-colors"
+                  style={leaveView === v ? { background: "#003E8E", color: "#fff" } : { color: "#6B7280" }}>
+                  {v === "today" ? "วันที่เลือก" : "ทั้งหมด"}
+                </button>
+              ))}
+            </div>
+            {dailyLoading ? (
+              <div className="py-8 text-center text-gray-400 text-sm">กำลังโหลด...</div>
+            ) : (() => {
+              const d = new Date(date);
+              const displayed = leaveView === "today"
+                ? (dailyData?.leaves ?? []).filter(l => new Date(l.startDate) <= d && d <= new Date(l.endDate))
+                : (dailyData?.leaves ?? []);
+              return !displayed.length ? (
+                <div className="py-8 text-center text-gray-400 text-sm">ไม่มีคำขอลา</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {displayed.map(l => (
+                    <div key={l.id} className="px-5 py-3 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold" style={{ background: "#FEF3C7", color: "#D97706" }}>
+                        {(l.user.nickname ?? l.user.name ?? "?").slice(0, 1)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{l.user.nickname ?? l.user.name ?? "—"}</p>
+                        <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
+                        <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               );
-            })}
+            })()}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* Leave requests */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-          <p className="font-semibold text-gray-700 text-sm flex-1">คำขอลา</p>
-          <button onClick={() => setLeaveView("today")}
-            className={`text-xs px-3 py-1 rounded-full transition-colors ${leaveView === "today" ? "text-white" : "text-gray-500 hover:bg-gray-50"}`}
-            style={leaveView === "today" ? { background: "#003E8E" } : {}}>วันที่เลือก</button>
-          <button onClick={() => setLeaveView("all")}
-            className={`text-xs px-3 py-1 rounded-full transition-colors ${leaveView === "all" ? "text-white" : "text-gray-500 hover:bg-gray-50"}`}
-            style={leaveView === "all" ? { background: "#003E8E" } : {}}>ทั้งหมด</button>
-        </div>
-        {loading ? (
-          <div className="py-8 text-center text-gray-400 text-sm">กำลังโหลด...</div>
-        ) : !displayedLeaves.length ? (
-          <div className="py-8 text-center text-gray-400 text-sm">ไม่มีคำขอลา</div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {displayedLeaves.map(l => (
-              <div key={l.id} className="px-5 py-3 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                  style={{ background: "#FEF3C7", color: "#D97706" }}>
-                  {(l.user.nickname ?? l.user.name ?? "?").slice(0, 1)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{l.user.nickname ?? l.user.name ?? "—"}</p>
-                  <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
-                  <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>
-                </div>
-              </div>
-            ))}
+      {/* ── MONTHLY VIEW ── */}
+      {view === "monthly" && (
+        <>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)} max={thisMonth}
+              className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm" />
+            <button onClick={exportMonthly} disabled={!monthlyData || monthlyLoading}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-all"
+              style={{ background: "linear-gradient(135deg,#16A34A,#15803D)" }}>
+              ⬇ Export Excel
+            </button>
           </div>
-        )}
-      </div>
+
+          {monthlyLoading ? (
+            <div className="py-16 text-center text-gray-400">กำลังโหลด...</div>
+          ) : !monthlyData ? null : (() => {
+            const [y, m] = month.split("-").map(Number);
+            const days = daysInMonth(month);
+            const dayNums = Array.from({ length: days }, (_, i) => i + 1);
+
+            return (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <p className="font-semibold text-gray-700 text-sm">
+                    {new Date(`${month}-01`).toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="text-xs w-full border-collapse">
+                    <thead>
+                      <tr style={{ background: "#F8FAFF" }}>
+                        <th className="text-left px-4 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 min-w-[120px]">ชื่อ</th>
+                        {dayNums.map(d => (
+                          <th key={d} className="px-1 py-2 font-semibold text-gray-500 text-center min-w-[28px]">{d}</th>
+                        ))}
+                        <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#16A34A" }}>มา</th>
+                        <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#D97706" }}>ลา</th>
+                        <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#DC2626" }}>ขาด</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthlyData.students.map((s, si) => {
+                        const counts = { มา: 0, ลา: 0, ขาด: 0 };
+                        const cells = dayNums.map(d => {
+                          const dayStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                          const st = getDayStatus(monthlyData, s.id, dayStr);
+                          counts[st]++;
+                          return { dayStr, st };
+                        });
+                        return (
+                          <tr key={s.id} className={si % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                            <td className="px-4 py-2 font-medium text-gray-800 sticky left-0 z-10" style={{ background: si % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                              <div>{s.nickname ?? s.name ?? "—"}</div>
+                              {s.name && s.nickname && <div className="text-[10px] text-gray-400">{s.name}</div>}
+                            </td>
+                            {cells.map(({ dayStr, st }) => {
+                              const c = st === "มา" ? "#16A34A" : st === "ลา" ? "#D97706" : "#E5E7EB";
+                              const txt = st === "มา" ? "✓" : st === "ลา" ? "ล" : "×";
+                              return (
+                                <td key={dayStr} className="text-center py-2 px-0.5">
+                                  <span className="text-[11px] font-bold" style={{ color: c }}>{txt}</span>
+                                </td>
+                              );
+                            })}
+                            <td className="text-center py-2 font-bold" style={{ color: "#16A34A" }}>{counts.มา}</td>
+                            <td className="text-center py-2 font-bold" style={{ color: "#D97706" }}>{counts.ลา}</td>
+                            <td className="text-center py-2 font-bold" style={{ color: "#DC2626" }}>{counts.ขาด}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Leave requests for month */}
+                {monthlyData.leaves.length > 0 && (
+                  <div className="border-t border-gray-100 px-5 py-4">
+                    <p className="text-xs font-semibold text-gray-500 mb-3">คำขอลาในเดือนนี้</p>
+                    <div className="space-y-2">
+                      {monthlyData.leaves.map(l => (
+                        <div key={l.id} className="flex items-start gap-2 text-xs text-gray-600">
+                          <span className="font-medium text-gray-800 shrink-0">{l.user.nickname ?? l.user.name}</span>
+                          <span className="text-gray-400">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</span>
+                          <span className="text-gray-500">{l.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </>
+      )}
     </div>
   );
 }
