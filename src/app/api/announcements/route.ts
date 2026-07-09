@@ -22,15 +22,14 @@ export async function GET(req: Request) {
   });
 
   if (markRead && announcements.length > 0) {
-    await prisma.$transaction(
-      announcements.map(a =>
-        prisma.announcementRead.upsert({
-          where: { announcementId_userId: { announcementId: a.id, userId } },
-          create: { announcementId: a.id, userId },
-          update: {},
-        })
-      )
-    );
+    // $transaction and upsert don't work with Neon HTTP driver — use raw INSERT ON CONFLICT instead
+    await prisma.$executeRaw`
+      INSERT INTO "AnnouncementRead" ("announcementId", "userId")
+      SELECT a.id, ${userId}
+      FROM "Announcement" a
+      WHERE a.id = ANY(${announcements.map(a => a.id)}::text[])
+      ON CONFLICT DO NOTHING
+    `;
   }
 
   return NextResponse.json(announcements.map(a => ({

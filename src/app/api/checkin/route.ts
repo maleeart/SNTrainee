@@ -44,11 +44,14 @@ export async function POST() {
     });
     if (onLeave) return NextResponse.json({ error: "กำลังลาในวันนี้" }, { status: 400 });
 
-    const checkIn = await prisma.checkIn.upsert({
+    // upsert uses internal transaction which Neon HTTP driver doesn't support
+    // use create + catch unique constraint instead
+    let checkIn = await prisma.checkIn.findUnique({
       where: { userId_date: { userId, date: todayDate } },
-      create: { userId, date: todayDate },
-      update: {},
     });
+    if (!checkIn) {
+      checkIn = await prisma.checkIn.create({ data: { userId, date: todayDate } });
+    }
 
     return NextResponse.json({ checkInTime: checkIn.createdAt });
   } catch (e) {
