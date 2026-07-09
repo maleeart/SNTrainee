@@ -19,7 +19,7 @@ type Rep = {
   evaluations: EvalRecord[];
 };
 
-type Tab = "overview" | "logs" | "export" | "users" | "announce";
+type Tab = "overview" | "logs" | "export" | "users" | "announce" | "attendance";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function batchKey(s: U) {
@@ -102,7 +102,8 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     { id: "logs",      label: "บันทึกการฝึกงาน",  badge: pending, icon: <IconClipboard /> },
     { id: "export",    label: "รายงาน",            icon: <IconExport /> },
     { id: "users",     label: "ผู้ใช้งาน",         icon: <IconUsers /> },
-    { id: "announce",  label: "ประกาศ",            icon: <IconMega /> },
+    { id: "announce",   label: "ประกาศ",            icon: <IconMega /> },
+    { id: "attendance", label: "บันทึกลงเวลา",     icon: <IconClock /> },
   ];
 
   const activeNav = NAV.find(n => n.id === tab);
@@ -240,7 +241,8 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
-            {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
+            {tab === "announce"   && <AnnounceTab readOnly={readOnly} />}
+            {tab === "attendance" && <AttendanceTab />}
           </div>
         </main>
       </div>
@@ -1633,6 +1635,140 @@ function IconExport()    { return I("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4
 function IconUsers()     { return I("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 4a4 4 0 0 1 4 4v2"); }
 function IconMega()      { return I("M3 11l19-9-9 19-2-8-8-2zM22 2 11 13"); }
 function IconQuiz()      { return I("M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6m-6 4h4"); }
+function IconClock()     { return I("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 5v5l3 3"); }
+
+// ─── Attendance Tab ───────────────────────────────────────────────────────────
+type AttendanceStudent = {
+  id: string; name: string | null; nickname: string | null;
+  checkedIn: boolean; checkInTime: string | null; onLeave: boolean; status: "มา" | "ลา" | "ขาด";
+};
+type AttendanceLeave = {
+  id: string; userId: string; startDate: string; endDate: string; reason: string; createdAt: string;
+  user: { id: string; name: string | null; nickname: string | null };
+};
+
+function AttendanceTab() {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const [date, setDate] = useState(today);
+  const [data, setData] = useState<{ students: AttendanceStudent[]; leaves: AttendanceLeave[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [leaveView, setLeaveView] = useState<"today" | "all">("today");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/attendance?date=${date}`)
+      .then(r => r.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [date]);
+
+  const fmtDate = (s: string) => {
+    const d = new Date(s);
+    return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const fmtTime = (s: string) => new Date(s).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+
+  const statusStyle = (s: string) =>
+    s === "มา" ? { bg: "#DCFCE7", color: "#16A34A", label: "✅ มา" }
+    : s === "ลา" ? { bg: "#FEF3C7", color: "#D97706", label: "📋 ลา" }
+    : { bg: "#FEE2E2", color: "#DC2626", label: "❌ ขาด" };
+
+  const todayLeaves = data?.leaves.filter(l => {
+    const s = new Date(l.startDate), e = new Date(l.endDate), d = new Date(date);
+    return s <= d && d <= e;
+  }) ?? [];
+  const displayedLeaves = leaveView === "today" ? todayLeaves : (data?.leaves ?? []);
+
+  return (
+    <div className="space-y-6">
+      {/* Date picker */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <h2 className="text-lg font-bold text-gray-800">บันทึกลงเวลา</h2>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} max={today}
+          className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm" />
+        {date !== today && (
+          <button onClick={() => setDate(today)} className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50">วันนี้</button>
+        )}
+      </div>
+
+      {/* Attendance table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <p className="font-semibold text-gray-700 text-sm">การเข้างาน — {fmtDate(date)}</p>
+          {!loading && data && (
+            <div className="flex gap-3 text-xs">
+              <span style={{ color: "#16A34A" }}>มา {data.students.filter(s => s.status === "มา").length}</span>
+              <span style={{ color: "#D97706" }}>ลา {data.students.filter(s => s.status === "ลา").length}</span>
+              <span style={{ color: "#DC2626" }}>ขาด {data.students.filter(s => s.status === "ขาด").length}</span>
+            </div>
+          )}
+        </div>
+        {loading ? (
+          <div className="py-10 text-center text-gray-400 text-sm">กำลังโหลด...</div>
+        ) : !data?.students.length ? (
+          <div className="py-10 text-center text-gray-400 text-sm">ไม่มีนักศึกษา</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {data.students.map(s => {
+              const st = statusStyle(s.status);
+              return (
+                <div key={s.id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{s.nickname ?? s.name ?? "—"}</p>
+                    {s.name && s.nickname && <p className="text-xs text-gray-400">{s.name}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.status === "มา" && s.checkInTime && (
+                      <span className="text-xs text-gray-400">{fmtTime(s.checkInTime)}</span>
+                    )}
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: st.bg, color: st.color }}>
+                      {st.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Leave requests */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+          <p className="font-semibold text-gray-700 text-sm flex-1">คำขอลา</p>
+          <button onClick={() => setLeaveView("today")}
+            className={`text-xs px-3 py-1 rounded-full transition-colors ${leaveView === "today" ? "text-white" : "text-gray-500 hover:bg-gray-50"}`}
+            style={leaveView === "today" ? { background: "#003E8E" } : {}}>วันที่เลือก</button>
+          <button onClick={() => setLeaveView("all")}
+            className={`text-xs px-3 py-1 rounded-full transition-colors ${leaveView === "all" ? "text-white" : "text-gray-500 hover:bg-gray-50"}`}
+            style={leaveView === "all" ? { background: "#003E8E" } : {}}>ทั้งหมด</button>
+        </div>
+        {loading ? (
+          <div className="py-8 text-center text-gray-400 text-sm">กำลังโหลด...</div>
+        ) : !displayedLeaves.length ? (
+          <div className="py-8 text-center text-gray-400 text-sm">ไม่มีคำขอลา</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {displayedLeaves.map(l => (
+              <div key={l.id} className="px-5 py-3 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
+                  style={{ background: "#FEF3C7", color: "#D97706" }}>
+                  {(l.user.nickname ?? l.user.name ?? "?").slice(0, 1)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{l.user.nickname ?? l.user.name ?? "—"}</p>
+                  <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Quiz Results Tab ─────────────────────────────────────────────────────────
 type QuizAttemptRow = {

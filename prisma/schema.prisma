@@ -92,6 +92,9 @@ model User {
   coursesCreated Course[]         @relation("CourseAuthor")
   lessonProgress LessonProgress[] @relation("LessonProgress")
   quizAttempts   QuizAttempt[]    @relation("QuizAttempts")
+
+  checkIns      CheckIn[]      @relation("CheckIns")
+  leaveRequests LeaveRequest[] @relation("LeaveRequests")
 }
 
 model VerificationToken {
@@ -206,6 +209,26 @@ model QuizAttempt {
   createdAt DateTime   @default(now())
   user      User       @relation("QuizAttempts", fields: [userId], references: [id], onDelete: Cascade)
   quiz      LessonQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+  user      User     @relation("CheckIns", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model LeaveRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  reason    String   @db.Text
+  createdAt DateTime @default(now())
+  user      User     @relation("LeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Evaluation {

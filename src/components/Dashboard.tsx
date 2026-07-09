@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Report } from "@prisma/client";
 import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
 import { exportPptx } from "@/lib/exportPptx";
@@ -11,6 +11,104 @@ type ReportEx = Report & { images: string[]; editReason: string | null; solution
 type MyStats = { totalReports: number; scoredReports: number; criteria: Record<string, number>; overall: number | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
+
+function AttendanceWidget() {
+  const [status, setStatus] = useState<{ checkedIn: boolean; checkInTime: string | null; onLeave: boolean; leaveReason: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showLeave, setShowLeave] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({ startDate: "", endDate: "", reason: "" });
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = () => fetch("/api/checkin").then(r => r.json()).then(setStatus).finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
+
+  const handleCheckIn = async () => {
+    setSubmitting(true);
+    const res = await fetch("/api/checkin", { method: "POST" });
+    if (res.ok) await load();
+    else alert((await res.json()).error ?? "Check-in ไม่สำเร็จ");
+    setSubmitting(false);
+  };
+
+  const handleLeave = async () => {
+    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()) return alert("กรุณากรอกข้อมูลให้ครบ");
+    setSubmitting(true);
+    const res = await fetch("/api/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(leaveForm) });
+    if (res.ok) { setShowLeave(false); setLeaveForm({ startDate: "", endDate: "", reason: "" }); await load(); }
+    else alert((await res.json()).error ?? "ส่งคำขอลาไม่สำเร็จ");
+    setSubmitting(false);
+  };
+
+  const fmtTime = (s: string) => new Date(s).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <>
+      <div className="rounded-2xl p-4 mb-5 flex flex-wrap gap-3 items-center" style={{ background: "#EEF4FF", border: "1px solid #C7D9FF" }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-gray-500 mb-0.5">สถานะวันนี้</p>
+          {loading ? (
+            <p className="text-sm text-gray-400">กำลังโหลด...</p>
+          ) : status?.onLeave ? (
+            <p className="text-sm font-semibold" style={{ color: "#D97706" }}>📋 กำลังลา{status.leaveReason ? ` — ${status.leaveReason}` : ""}</p>
+          ) : status?.checkedIn ? (
+            <p className="text-sm font-semibold" style={{ color: "#16A34A" }}>✅ Check-in แล้ว {status.checkInTime ? `เวลา ${fmtTime(status.checkInTime)}` : ""}</p>
+          ) : (
+            <p className="text-sm text-gray-500">ยังไม่ได้ Check-in วันนี้</p>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleCheckIn}
+            disabled={submitting || loading || !!status?.checkedIn || !!status?.onLeave}
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg,#16A34A,#15803D)" }}>
+            {submitting ? "..." : "Check-in"}
+          </button>
+          <button
+            onClick={() => setShowLeave(true)}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+            style={{ borderColor: "#D97706", color: "#D97706", background: "transparent" }}>
+            ขอลา
+          </button>
+        </div>
+      </div>
+
+      {showLeave && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="font-bold text-gray-800 mb-4">ขอลา</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">วันที่เริ่มลา</label>
+                <input type="date" value={leaveForm.startDate} onChange={e => setLeaveForm(f => ({ ...f, startDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">วันที่สิ้นสุด</label>
+                <input type="date" value={leaveForm.endDate} onChange={e => setLeaveForm(f => ({ ...f, endDate: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">เหตุผล</label>
+                <textarea value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))}
+                  rows={3} placeholder="ระบุเหตุผล..."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowLeave(false)} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600">ยกเลิก</button>
+              <button onClick={handleLeave} disabled={submitting}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: "#D97706" }}>
+                {submitting ? "กำลังส่ง..." : "ส่งคำขอ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -130,6 +228,8 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
       <AppNav name={user.name} nickname={user.nickname} email={user.email} image={user.image} role={user.role ?? "STUDENT"} level={user.level} school={user.school} advisor={user.advisor} startDate={user.startDate} endDate={user.endDate} profileHref="/profile" />
 
       <main className="max-w-5xl mx-auto px-4 py-6">
+
+        <AttendanceWidget />
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5 gap-3">
