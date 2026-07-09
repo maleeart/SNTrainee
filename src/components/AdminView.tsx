@@ -1787,7 +1787,7 @@ function AttendanceTab() {
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2 justify-between">
               <p className="font-semibold text-gray-700 text-sm">การเข้างาน — {fmtDate(date)}</p>
               {!dailyLoading && dailyData && (
                 <div className="flex gap-3 text-xs">
@@ -1807,21 +1807,21 @@ function AttendanceTab() {
                   const st = statusStyle(s.status as "มา" | "ลา" | "ขาด");
                   const isEditing = editing === s.id;
                   return (
-                    <div key={s.id} className="flex items-center gap-3 px-5 py-3">
+                    <div key={s.id} className="flex items-center gap-2 px-3 sm:px-5 py-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{s.nickname ?? s.name ?? "—"}</p>
-                        {s.name && s.nickname && <p className="text-xs text-gray-400">{s.name}</p>}
+                        <p className="text-sm font-medium text-gray-800 truncate">{s.nickname ?? s.name ?? "—"}</p>
+                        {s.name && s.nickname && <p className="text-xs text-gray-400 truncate">{s.name}</p>}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {s.status === "มา" && s.checkInTime && (
-                          <span className="text-xs text-gray-400">{fmtTime(s.checkInTime)}</span>
+                          <span className="text-xs text-gray-400 hidden sm:inline">{fmtTime(s.checkInTime)}</span>
                         )}
                         {isEditing ? (
                           <div className="flex gap-1">
                             {s.status !== "ลา" && (
                               <>
                                 <button disabled={saving} onClick={() => changeStatus(s.id, s.status)}
-                                  className="text-xs px-2.5 py-1 rounded-lg font-semibold border transition-colors disabled:opacity-40"
+                                  className="text-xs px-2 py-1 rounded-lg font-semibold border transition-colors disabled:opacity-40"
                                   style={s.status === "ขาด" ? { background: "#DCFCE7", color: "#16A34A", borderColor: "#16A34A" } : { background: "#FEE2E2", color: "#DC2626", borderColor: "#DC2626" }}>
                                   {saving ? "..." : s.status === "ขาด" ? "บันทึกมา" : "ลบการมา"}
                                 </button>
@@ -1830,12 +1830,12 @@ function AttendanceTab() {
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: st.bg, color: st.color }}>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: st.bg, color: st.color }}>
                               {statusLabel(s.status as "มา" | "ลา" | "ขาด")}
                             </span>
                             {s.status !== "ลา" && (
-                              <button onClick={() => setEditing(s.id)} className="text-xs text-gray-400 hover:text-gray-600 px-1">✏️</button>
+                              <button onClick={() => setEditing(s.id)} className="text-xs text-gray-400 hover:text-gray-600 p-1">✏️</button>
                             )}
                           </div>
                         )}
@@ -1871,20 +1871,22 @@ function AttendanceTab() {
               ) : (
                 <div className="divide-y divide-gray-50">
                   {displayed.map(l => (
-                    <div key={l.id} className="px-5 py-3 flex items-start gap-3">
+                    <div key={l.id} className="px-3 sm:px-5 py-3 flex items-start gap-2 sm:gap-3">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold" style={{ background: "#FEF3C7", color: "#D97706" }}>
                         {(l.user.nickname ?? l.user.name ?? "?").slice(0, 1)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{l.user.nickname ?? l.user.name ?? "—"}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-gray-800 truncate">{l.user.nickname ?? l.user.name ?? "—"}</p>
+                          <button onClick={() => cancelLeave(l.id)} disabled={cancellingLeave === l.id}
+                            className="text-xs px-2 py-0.5 rounded-lg border shrink-0 disabled:opacity-40"
+                            style={{ borderColor: "#DC2626", color: "#DC2626" }}>
+                            {cancellingLeave === l.id ? "..." : "ยกเลิก"}
+                          </button>
+                        </div>
                         <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
                         <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>
                       </div>
-                      <button onClick={() => cancelLeave(l.id)} disabled={cancellingLeave === l.id}
-                        className="text-xs px-2.5 py-1 rounded-lg border shrink-0 disabled:opacity-40"
-                        style={{ borderColor: "#DC2626", color: "#DC2626" }}>
-                        {cancellingLeave === l.id ? "..." : "ยกเลิก"}
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -1897,9 +1899,9 @@ function AttendanceTab() {
       {/* ── MONTHLY VIEW ── */}
       {view === "monthly" && (
         <>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <input type="month" value={month} onChange={e => setMonth(e.target.value)} max={thisMonth}
-              className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm" />
+              className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm flex-1 min-w-[140px]" />
             <button onClick={exportMonthly} disabled={!monthlyData || monthlyLoading}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 transition-all"
               style={{ background: "linear-gradient(135deg,#16A34A,#15803D)" }}>
@@ -1925,7 +1927,7 @@ function AttendanceTab() {
                   <table className="text-xs w-full border-collapse">
                     <thead>
                       <tr style={{ background: "#F8FAFF" }}>
-                        <th className="text-left px-4 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 min-w-[120px]">ชื่อ</th>
+                        <th className="text-left px-3 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10 min-w-[100px] max-w-[140px]">ชื่อ</th>
                         {dayNums.map(d => (
                           <th key={d} className="px-1 py-2 font-semibold text-gray-500 text-center min-w-[28px]">{d}</th>
                         ))}
@@ -1945,9 +1947,9 @@ function AttendanceTab() {
                         });
                         return (
                           <tr key={s.id} className={si % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                            <td className="px-4 py-2 font-medium text-gray-800 sticky left-0 z-10" style={{ background: si % 2 === 0 ? "#fff" : "#f9fafb" }}>
-                              <div>{s.nickname ?? s.name ?? "—"}</div>
-                              {s.name && s.nickname && <div className="text-[10px] text-gray-400">{s.name}</div>}
+                            <td className="px-3 py-2 font-medium text-gray-800 sticky left-0 z-10 max-w-[140px]" style={{ background: si % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                              <div className="truncate">{s.nickname ?? s.name ?? "—"}</div>
+                              {s.name && s.nickname && <div className="text-[10px] text-gray-400 truncate">{s.name}</div>}
                             </td>
                             {cells.map(({ dayStr, st }) => {
                               const c = st === "มา" ? "#16A34A" : st === "ลา" ? "#D97706" : "#E5E7EB";
@@ -1973,10 +1975,12 @@ function AttendanceTab() {
                     <p className="text-xs font-semibold text-gray-500 mb-3">คำขอลาในเดือนนี้</p>
                     <div className="space-y-2">
                       {monthlyData.leaves.map(l => (
-                        <div key={l.id} className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="font-medium text-gray-800 shrink-0">{l.user.nickname ?? l.user.name}</span>
-                          <span className="text-gray-400">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</span>
-                          <span className="text-gray-500 flex-1">{l.reason}</span>
+                        <div key={l.id} className="flex items-start justify-between gap-2 text-xs text-gray-600">
+                          <div className="min-w-0">
+                            <span className="font-medium text-gray-800">{l.user.nickname ?? l.user.name}</span>
+                            <span className="text-gray-400 ml-2">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</span>
+                            <p className="text-gray-500 mt-0.5">{l.reason}</p>
+                          </div>
                           <button onClick={async () => {
                             if (!confirm("ยกเลิกวันลานี้?")) return;
                             const res = await fetch(`/api/leave/${l.id}`, { method: "DELETE" });

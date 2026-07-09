@@ -81,7 +81,7 @@ function AttendanceWidget() {
               <p className="text-sm text-gray-500">ยังไม่ได้ Check-in วันนี้</p>
             )}
           </div>
-          <div className="flex gap-2 shrink-0 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleCheckIn}
               disabled={submitting || loading || !!status?.checkedIn || !!status?.onLeave}
@@ -285,7 +285,7 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
         <AttendanceWidget />
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5 gap-3">
+        <div className="flex items-center justify-between mb-5 gap-2">
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-800 leading-tight">บันทึกการฝึกงาน</h1>
             <p className="text-gray-400 text-xs mt-0.5">งานช่างไฟฟ้า อาคารและบริเวณ</p>
@@ -296,15 +296,15 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-colors disabled:opacity-40"
               style={{ borderColor: "#003E8E", color: "#003E8E", background: "transparent" }}>
               {exporting
-                ? <><span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Export...</>
-                : <>⬇ Export PPTX</>}
+                ? <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : <><span>⬇</span><span className="hidden sm:inline"> Export PPTX</span></>}
             </button>
             {/* Primary: New report */}
             <button onClick={() => { setEditing(blank()); setToolInput(""); setPpeInput(""); }}
-              className="flex items-center gap-1.5 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-md transition-all hover:shadow-lg active:scale-95"
+              className="flex items-center gap-1.5 text-white px-3 sm:px-4 py-2.5 rounded-xl font-semibold text-sm shadow-md transition-all hover:shadow-lg active:scale-95"
               style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>
-              บันทึกรายงาน
+              <span className="hidden sm:inline">บันทึกรายงาน</span>
             </button>
           </div>
         </div>
