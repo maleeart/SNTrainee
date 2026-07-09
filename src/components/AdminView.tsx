@@ -19,7 +19,7 @@ type Rep = {
   evaluations: EvalRecord[];
 };
 
-type Tab = "overview" | "logs" | "export" | "users" | "announce";
+type Tab = "overview" | "logs" | "export" | "users" | "announce" | "quiz";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function batchKey(s: U) {
@@ -103,6 +103,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     { id: "export",    label: "รายงาน",            icon: <IconExport /> },
     { id: "users",     label: "ผู้ใช้งาน",         icon: <IconUsers /> },
     { id: "announce",  label: "ประกาศ",            icon: <IconMega /> },
+    { id: "quiz",      label: "ผลแบบทดสอบ",       icon: <IconQuiz /> },
   ];
 
   const activeNav = NAV.find(n => n.id === tab);
@@ -241,6 +242,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
             {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
+            {tab === "quiz"     && <QuizResultsTab />}
           </div>
         </main>
       </div>
@@ -1632,6 +1634,94 @@ function IconClipboard() { return I("M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 
 function IconExport()    { return I("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"); }
 function IconUsers()     { return I("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm7 4a4 4 0 0 1 4 4v2"); }
 function IconMega()      { return I("M3 11l19-9-9 19-2-8-8-2zM22 2 11 13"); }
+function IconQuiz()      { return I("M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6m-6 4h4"); }
+
+// ─── Quiz Results Tab ─────────────────────────────────────────────────────────
+type QuizAttemptRow = {
+  id: string; score: number; passed: boolean; createdAt: string;
+  user: { id: string; name: string | null; nickname: string | null; role: string };
+  quiz: { lesson: { title: string; course: { title: string } } };
+};
+
+function QuizResultsTab() {
+  const [rows, setRows] = useState<QuizAttemptRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetch("/api/training/results").then(r => r.json()).then(d => { setRows(d); setLoading(false); });
+  }, []);
+
+  const filtered = rows.filter(r => {
+    const q = search.toLowerCase();
+    return !q
+      || (r.user.name ?? "").toLowerCase().includes(q)
+      || (r.user.nickname ?? "").toLowerCase().includes(q)
+      || r.quiz.lesson.course.title.toLowerCase().includes(q)
+      || r.quiz.lesson.title.toLowerCase().includes(q);
+  });
+
+  if (loading) return <div className="py-20 text-center text-gray-400 text-sm">กำลังโหลด...</div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-bold" style={{ color: "#003E8E" }}>ผลแบบทดสอบ</h2>
+          <p className="text-xs text-gray-400">{rows.length} ครั้งที่ทำทั้งหมด</p>
+        </div>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="ค้นหาชื่อ / หลักสูตร..."
+          className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none focus:border-blue-400 w-60" />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center text-gray-400 text-sm">ไม่มีข้อมูล</div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "#F8FAFF" }}>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">ผู้ทำ</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">หลักสูตร / บทเรียน</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs">คะแนน</th>
+                  <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs">ผล</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">วันที่</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map(r => (
+                  <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-800">{r.user.nickname || r.user.name || "-"}</p>
+                      {r.user.nickname && <p className="text-xs text-gray-400">{r.user.name}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-gray-700">{r.quiz.lesson.course.title}</p>
+                      <p className="text-xs text-gray-400">{r.quiz.lesson.title}</p>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-bold text-base" style={{ color: r.passed ? "#10B981" : "#EF4444" }}>{r.score}%</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                        {r.passed ? "ผ่าน" : "ไม่ผ่าน"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400">
+                      {new Date(r.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
