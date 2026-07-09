@@ -12,17 +12,22 @@ type MyStats = { totalReports: number; scoredReports: number; criteria: Record<s
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
 
+type LeaveItem = { id: string; startDate: string; endDate: string; reason: string };
+
 function AttendanceWidget() {
   const [status, setStatus] = useState<{ checkedIn: boolean; checkInTime: string | null; onLeave: boolean; leaveReason: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leaves, setLeaves] = useState<LeaveItem[]>([]);
   const [showLeave, setShowLeave] = useState(false);
+  const [showLeaveList, setShowLeaveList] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ startDate: "", endDate: "", reason: "" });
   const [submitting, setSubmitting] = useState(false);
 
   const load = async () => {
     try {
-      const r = await fetch("/api/checkin");
-      if (r.ok) setStatus(await r.json());
+      const [r1, r2] = await Promise.all([fetch("/api/checkin"), fetch("/api/leave")]);
+      if (r1.ok) setStatus(await r1.json());
+      if (r2.ok) setLeaves(await r2.json());
     } catch { /* silent */ } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -48,38 +53,77 @@ function AttendanceWidget() {
     finally { setSubmitting(false); }
   };
 
+  const cancelLeave = async (id: string) => {
+    if (!confirm("ยกเลิกวันลานี้?")) return;
+    try {
+      const res = await fetch(`/api/leave/${id}`, { method: "DELETE" });
+      if (res.ok) await load();
+      else { const j = await res.json().catch(() => ({})); alert(j.error ?? "ยกเลิกไม่สำเร็จ"); }
+    } catch { alert("เกิดข้อผิดพลาด"); }
+  };
+
+  const fmtDate = (s: string) => new Date(s).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
   const fmtTime = (s: string) => new Date(s).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <>
-      <div className="rounded-2xl p-4 mb-5 flex flex-wrap gap-3 items-center" style={{ background: "#EEF4FF", border: "1px solid #C7D9FF" }}>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-500 mb-0.5">สถานะวันนี้</p>
-          {loading ? (
-            <p className="text-sm text-gray-400">กำลังโหลด...</p>
-          ) : status?.onLeave ? (
-            <p className="text-sm font-semibold" style={{ color: "#D97706" }}>📋 กำลังลา{status.leaveReason ? ` — ${status.leaveReason}` : ""}</p>
-          ) : status?.checkedIn ? (
-            <p className="text-sm font-semibold" style={{ color: "#16A34A" }}>✅ Check-in แล้ว {status.checkInTime ? `เวลา ${fmtTime(status.checkInTime)}` : ""}</p>
-          ) : (
-            <p className="text-sm text-gray-500">ยังไม่ได้ Check-in วันนี้</p>
-          )}
+      <div className="rounded-2xl p-4 mb-5" style={{ background: "#EEF4FF", border: "1px solid #C7D9FF" }}>
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-500 mb-0.5">สถานะวันนี้</p>
+            {loading ? (
+              <p className="text-sm text-gray-400">กำลังโหลด...</p>
+            ) : status?.onLeave ? (
+              <p className="text-sm font-semibold" style={{ color: "#D97706" }}>📋 กำลังลา{status.leaveReason ? ` — ${status.leaveReason}` : ""}</p>
+            ) : status?.checkedIn ? (
+              <p className="text-sm font-semibold" style={{ color: "#16A34A" }}>✅ Check-in แล้ว {status.checkInTime ? `เวลา ${fmtTime(status.checkInTime)}` : ""}</p>
+            ) : (
+              <p className="text-sm text-gray-500">ยังไม่ได้ Check-in วันนี้</p>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0 flex-wrap">
+            <button
+              onClick={handleCheckIn}
+              disabled={submitting || loading || !!status?.checkedIn || !!status?.onLeave}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40"
+              style={{ background: "linear-gradient(135deg,#16A34A,#15803D)" }}>
+              {submitting ? "..." : "Check-in"}
+            </button>
+            <button
+              onClick={() => setShowLeave(true)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+              style={{ borderColor: "#D97706", color: "#D97706", background: "transparent" }}>
+              ขอลา
+            </button>
+            {leaves.length > 0 && (
+              <button
+                onClick={() => setShowLeaveList(v => !v)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                style={{ borderColor: "#6B7280", color: "#6B7280", background: "transparent" }}>
+                รายการลา ({leaves.length})
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleCheckIn}
-            disabled={submitting || loading || !!status?.checkedIn || !!status?.onLeave}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40"
-            style={{ background: "linear-gradient(135deg,#16A34A,#15803D)" }}>
-            {submitting ? "..." : "Check-in"}
-          </button>
-          <button
-            onClick={() => setShowLeave(true)}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-            style={{ borderColor: "#D97706", color: "#D97706", background: "transparent" }}>
-            ขอลา
-          </button>
-        </div>
+
+        {/* Leave list */}
+        {showLeaveList && leaves.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-blue-100 space-y-2">
+            {leaves.map(l => (
+              <div key={l.id} className="flex items-start gap-2 bg-white rounded-xl px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-700">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{l.reason}</p>
+                </div>
+                <button onClick={() => cancelLeave(l.id)}
+                  className="text-xs px-2.5 py-1 rounded-lg border shrink-0"
+                  style={{ borderColor: "#DC2626", color: "#DC2626" }}>
+                  ยกเลิก
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {showLeave && (

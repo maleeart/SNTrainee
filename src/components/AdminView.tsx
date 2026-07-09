@@ -1672,6 +1672,7 @@ function AttendanceTab() {
   const [dailyLoading, setDailyLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null); // userId being edited
   const [saving, setSaving] = useState(false);
+  const [cancellingLeave, setCancellingLeave] = useState<string | null>(null);
   const [leaveView, setLeaveView] = useState<"today" | "all">("today");
 
   const loadDaily = (d: string) => {
@@ -1679,6 +1680,16 @@ function AttendanceTab() {
     fetch(`/api/attendance?date=${d}`).then(r => r.json()).then(setDailyData).finally(() => setDailyLoading(false));
   };
   useEffect(() => { loadDaily(date); }, [date]);
+
+  const cancelLeave = async (id: string) => {
+    if (!confirm("ยกเลิกวันลานี้?")) return;
+    setCancellingLeave(id);
+    try {
+      const res = await fetch(`/api/leave/${id}`, { method: "DELETE" });
+      if (res.ok) loadDaily(date);
+      else alert((await res.json().catch(() => ({}))).error ?? "ยกเลิกไม่สำเร็จ");
+    } finally { setCancellingLeave(null); }
+  };
 
   const changeStatus = async (userId: string, currentStatus: string) => {
     if (currentStatus === "ลา") return; // leave-managed, can't override here
@@ -1869,6 +1880,11 @@ function AttendanceTab() {
                         <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
                         <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>
                       </div>
+                      <button onClick={() => cancelLeave(l.id)} disabled={cancellingLeave === l.id}
+                        className="text-xs px-2.5 py-1 rounded-lg border shrink-0 disabled:opacity-40"
+                        style={{ borderColor: "#DC2626", color: "#DC2626" }}>
+                        {cancellingLeave === l.id ? "..." : "ยกเลิก"}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1957,10 +1973,18 @@ function AttendanceTab() {
                     <p className="text-xs font-semibold text-gray-500 mb-3">คำขอลาในเดือนนี้</p>
                     <div className="space-y-2">
                       {monthlyData.leaves.map(l => (
-                        <div key={l.id} className="flex items-start gap-2 text-xs text-gray-600">
+                        <div key={l.id} className="flex items-center gap-2 text-xs text-gray-600">
                           <span className="font-medium text-gray-800 shrink-0">{l.user.nickname ?? l.user.name}</span>
                           <span className="text-gray-400">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</span>
-                          <span className="text-gray-500">{l.reason}</span>
+                          <span className="text-gray-500 flex-1">{l.reason}</span>
+                          <button onClick={async () => {
+                            if (!confirm("ยกเลิกวันลานี้?")) return;
+                            const res = await fetch(`/api/leave/${l.id}`, { method: "DELETE" });
+                            if (res.ok) setMonthlyData(d => d ? { ...d, leaves: d.leaves.filter(x => x.id !== l.id) } : d);
+                            else alert((await res.json().catch(() => ({}))).error ?? "ยกเลิกไม่สำเร็จ");
+                          }} className="px-2 py-0.5 rounded border shrink-0" style={{ borderColor: "#DC2626", color: "#DC2626" }}>
+                            ยกเลิก
+                          </button>
                         </div>
                       ))}
                     </div>
