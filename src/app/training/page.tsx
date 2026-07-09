@@ -27,7 +27,9 @@ export default async function TrainingPage() {
       completed: l.progress.length > 0 || (l.quiz?.attempts[0]?.passed ?? false),
       quiz: l.quiz ? {
         id: l.quiz.id, passScore: l.quiz.passScore,
-        questions: l.quiz.questions as { q: string; options: string[]; answer: number }[],
+        questions: (l.quiz.questions as { q: string; options: string[]; answer: number }[]).map(
+          ({ q, options, answer }) => u.role === "ADMIN" ? { q, options, answer } : { q, options }
+        ),
         bestScore: l.quiz.attempts[0]?.score ?? null,
         passed: l.quiz.attempts[0]?.passed ?? false,
       } : null

@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import AppNav from "./AppNav";
 
-type QuizQ = { q: string; options: string[]; answer: number };
+type QuizQ = { q: string; options: string[]; answer?: number };
 
 type LessonData = {
   id: string; title: string; order: number;
@@ -172,8 +172,10 @@ function QuizBuilderModal({ lesson, onClose, onSave }: {
   onSave: (d: { passScore: number; questions: QuizQ[] }) => Promise<void>;
 }) {
   const [passScore, setPassScore] = useState(lesson.quiz?.passScore ?? 70);
-  const [questions, setQuestions] = useState<QuizQ[]>(
-    lesson.quiz?.questions.length ? lesson.quiz.questions : [{ q: "", options: ["", "", "", ""], answer: 0 }]
+  const [questions, setQuestions] = useState<(QuizQ & { answer: number })[]>(
+    lesson.quiz?.questions.length
+      ? lesson.quiz.questions.map(q => ({ ...q, answer: q.answer ?? 0 }))
+      : [{ q: "", options: ["", "", "", ""], answer: 0 }]
   );
   const [busy, setBusy] = useState(false);
 
@@ -297,24 +299,33 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
             {/* Video */}
             {lesson.videoUrl && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">▶ วิดีโอสอน</p>
-                <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
-                  <iframe src={driveEmbed(lesson.videoUrl)} className="w-full h-full" allow="autoplay" allowFullScreen style={{ border: "none" }} />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">▶ วิดีโอสอน</p>
+                  <a href={lesson.videoUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline flex-shrink-0">เปิดใน Google Drive ↗</a>
                 </div>
+                <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+                  <iframe src={driveEmbed(lesson.videoUrl)} className="w-full h-full"
+                    allow="autoplay; fullscreen; encrypted-media" allowFullScreen
+                    referrerPolicy="no-referrer-when-downgrade" style={{ border: "none" }} />
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">หากวิดีโอไม่แสดง กรุณากด "เปิดใน Google Drive" ด้านบน</p>
               </div>
             )}
 
             {/* PDF */}
             {lesson.fileUrl && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">📄 ไฟล์บรรยาย</p>
-                <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ height: 480 }}>
-                  <iframe src={lesson.fileUrl} className="w-full h-full" style={{ border: "none" }} />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">📄 ไฟล์บรรยาย</p>
+                  <a href={lesson.fileUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline flex-shrink-0">⬇ ดาวน์โหลด</a>
                 </div>
-                <a href={lesson.fileUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-block mt-2 text-xs text-blue-600 hover:underline">
-                  ⬇ ดาวน์โหลด {lesson.fileName ?? "ไฟล์"}
-                </a>
+                <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ height: 520 }}>
+                  <iframe
+                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(lesson.fileUrl)}&embedded=true`}
+                    className="w-full h-full" style={{ border: "none" }} />
+                </div>
               </div>
             )}
 

@@ -162,11 +162,11 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
         {/* Sidebar footer */}
         <div className="px-3 pb-5 pt-3 space-y-0.5" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
           <a href="/training"
-            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm transition-colors"
-            style={{ color: "rgba(255,255,255,0.45)", textDecoration: "none" }}
-            onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.85)")}
-            onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.45)")}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            style={{ color: "rgba(255,255,255,0.75)", textDecoration: "none", background: "rgba(255,255,255,0.06)" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.12)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.75)"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#FFC000" }}>
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
             <span>เนื้อหาอบรม</span>
