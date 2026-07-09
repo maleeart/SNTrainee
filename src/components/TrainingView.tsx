@@ -258,16 +258,22 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
   const submitQuiz = async () => {
     if (!lesson.quiz || answers.some(a => a === null)) return;
     setSubmitting(true);
-    const res = await fetch(`/api/training/quiz/${lesson.quiz.id}/attempt`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers })
-    });
-    const data = await res.json();
-    setQuizResult(data);
-    setSubmitting(false);
-    if (data.passed) {
-      onQuizDone({ ...lesson, completed: true, quiz: { ...lesson.quiz!, bestScore: data.score, passed: true } });
-    } else if (lesson.quiz!.bestScore === null || data.score > lesson.quiz!.bestScore) {
-      onQuizDone({ ...lesson, quiz: { ...lesson.quiz!, bestScore: data.score } });
+    try {
+      const res = await fetch(`/api/training/quiz/${lesson.quiz.id}/attempt`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers })
+      });
+      if (!res.ok) { alert(`ส่งคำตอบไม่สำเร็จ (${res.status})`); return; }
+      const data = await res.json();
+      setQuizResult(data);
+      if (data.passed) {
+        onQuizDone({ ...lesson, completed: true, quiz: { ...lesson.quiz!, bestScore: data.score, passed: true } });
+      } else if (lesson.quiz!.bestScore === null || data.score > lesson.quiz!.bestScore) {
+        onQuizDone({ ...lesson, quiz: { ...lesson.quiz!, bestScore: data.score } });
+      }
+    } catch (e) {
+      alert("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      setSubmitting(false);
     }
   };
 
