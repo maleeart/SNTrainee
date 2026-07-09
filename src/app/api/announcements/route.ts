@@ -2,13 +2,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-// GET — list announcements for the current user (unread first, then read, pinned on top)
-export async function GET() {
+// GET — list announcements for the current user
+// ?markread=1 also persists all as read in one transaction
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const role = session.user.role ?? "STUDENT";
   const userId = session.user.id;
+  const markRead = new URL(req.url).searchParams.get("markread") === "1";
 
   const announcements = await prisma.announcement.findMany({
     where: { OR: [{ target: "ALL" }, { target: role }] },
@@ -19,6 +21,18 @@ export async function GET() {
     },
   });
 
+  if (markRead && announcements.length > 0) {
+    await prisma.$transaction(
+      announcements.map(a =>
+        prisma.announcementRead.upsert({
+          where: { announcementId_userId: { announcementId: a.id, userId } },
+          create: { announcementId: a.id, userId },
+          update: {},
+        })
+      )
+    );
+  }
+
   return NextResponse.json(announcements.map(a => ({
     id: a.id,
     title: a.title,
@@ -27,7 +41,7 @@ export async function GET() {
     pinned: a.pinned,
     createdAt: a.createdAt,
     author: a.createdBy.nickname ?? a.createdBy.name ?? "Admin",
-    read: a.reads.length > 0,
+    read: markRead ? true : a.reads.length > 0,
   })));
 }
 

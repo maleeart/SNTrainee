@@ -30,9 +30,10 @@ export default function AnnouncementBell() {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (markRead = false) => {
     try {
-      const res = await fetch("/api/announcements");
+      const url = markRead ? "/api/announcements?markread=1" : "/api/announcements";
+      const res = await fetch(url);
       if (res.ok) setItems(await res.json());
     } catch { /* silent */ }
   }, []);
@@ -47,27 +48,17 @@ export default function AnnouncementBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const markRead = async (id: string) => {
-    await fetch(`/api/announcements/${id}`, { method: "POST" });
+  const markRead = (id: string) => {
     setItems(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
+    fetch(`/api/announcements/${id}`, { method: "POST" });
   };
 
-  const markAllRead = async () => {
-    const unread = items.filter(a => !a.read);
-    if (!unread.length) return;
-    setItems(prev => prev.map(a => ({ ...a, read: true })));
-    await Promise.all(unread.map(a => fetch(`/api/announcements/${a.id}`, { method: "POST" })));
+  const handleBellClick = () => {
+    const opening = !open;
+    setOpen(opening);
+    // on open: fetch with markread=1 to atomically read+persist in one request
+    if (opening) load(true);
   };
-
-  // mark all read whenever bell opens (items is always fresh here)
-  useEffect(() => {
-    if (!open) return;
-    const unread = items.filter(a => !a.read);
-    if (!unread.length) return;
-    setItems(prev => prev.map(a => ({ ...a, read: true })));
-    unread.forEach(a => fetch(`/api/announcements/${a.id}`, { method: "POST" }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   const unreadCount = items.filter(a => !a.read).length;
 
@@ -75,7 +66,7 @@ export default function AnnouncementBell() {
     <div className="relative" ref={drawerRef}>
       {/* Bell button */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={handleBellClick}
         className="relative p-2 rounded-xl transition-colors hover:bg-white/10"
         aria-label="ประกาศ"
       >
@@ -108,12 +99,6 @@ export default function AnnouncementBell() {
                 </span>
               )}
             </div>
-            {unreadCount > 0 && (
-              <button onClick={() => markAllRead()}
-                className="text-xs text-white/60 hover:text-white transition-colors">
-                อ่านทั้งหมด
-              </button>
-            )}
           </div>
 
           {/* List */}
@@ -123,7 +108,7 @@ export default function AnnouncementBell() {
             ) : (
               <div className="divide-y divide-gray-50">
                 {items.map(a => (
-                  <button key={a.id} onClick={() => !a.read && markRead(a.id)}
+                  <button key={a.id} onClick={() => { if (!a.read) markRead(a.id); }}
                     className="w-full text-left px-4 py-3 transition-colors hover:bg-gray-50 block"
                     style={a.read ? {} : { background: "#F0F7FF" }}>
                     <div className="flex items-start gap-2.5">
