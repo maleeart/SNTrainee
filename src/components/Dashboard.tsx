@@ -19,24 +19,33 @@ function AttendanceWidget() {
   const [leaveForm, setLeaveForm] = useState({ startDate: "", endDate: "", reason: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  const load = () => fetch("/api/checkin").then(r => r.json()).then(setStatus).finally(() => setLoading(false));
+  const load = async () => {
+    try {
+      const r = await fetch("/api/checkin");
+      if (r.ok) setStatus(await r.json());
+    } catch { /* silent */ } finally { setLoading(false); }
+  };
   useEffect(() => { load(); }, []);
 
   const handleCheckIn = async () => {
     setSubmitting(true);
-    const res = await fetch("/api/checkin", { method: "POST" });
-    if (res.ok) await load();
-    else alert((await res.json()).error ?? "Check-in ไม่สำเร็จ");
-    setSubmitting(false);
+    try {
+      const res = await fetch("/api/checkin", { method: "POST" });
+      if (res.ok) { await load(); }
+      else { const j = await res.json().catch(() => ({})); alert(j.error ?? "Check-in ไม่สำเร็จ"); }
+    } catch { alert("เกิดข้อผิดพลาด กรุณาลองใหม่"); }
+    finally { setSubmitting(false); }
   };
 
   const handleLeave = async () => {
     if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()) return alert("กรุณากรอกข้อมูลให้ครบ");
     setSubmitting(true);
-    const res = await fetch("/api/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(leaveForm) });
-    if (res.ok) { setShowLeave(false); setLeaveForm({ startDate: "", endDate: "", reason: "" }); await load(); }
-    else alert((await res.json()).error ?? "ส่งคำขอลาไม่สำเร็จ");
-    setSubmitting(false);
+    try {
+      const res = await fetch("/api/leave", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(leaveForm) });
+      if (res.ok) { setShowLeave(false); setLeaveForm({ startDate: "", endDate: "", reason: "" }); await load(); }
+      else { const j = await res.json().catch(() => ({})); alert(j.error ?? "ส่งคำขอลาไม่สำเร็จ"); }
+    } catch { alert("เกิดข้อผิดพลาด กรุณาลองใหม่"); }
+    finally { setSubmitting(false); }
   };
 
   const fmtTime = (s: string) => new Date(s).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
