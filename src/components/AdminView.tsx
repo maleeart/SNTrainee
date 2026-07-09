@@ -19,7 +19,7 @@ type Rep = {
   evaluations: EvalRecord[];
 };
 
-type Tab = "overview" | "logs" | "export" | "users" | "announce" | "quiz";
+type Tab = "overview" | "logs" | "export" | "users" | "announce";
 
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 function batchKey(s: U) {
@@ -103,7 +103,6 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     { id: "export",    label: "รายงาน",            icon: <IconExport /> },
     { id: "users",     label: "ผู้ใช้งาน",         icon: <IconUsers /> },
     { id: "announce",  label: "ประกาศ",            icon: <IconMega /> },
-    { id: "quiz",      label: "ผลแบบทดสอบ",       icon: <IconQuiz /> },
   ];
 
   const activeNav = NAV.find(n => n.id === tab);
@@ -242,7 +241,6 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
             {tab === "announce" && <AnnounceTab readOnly={readOnly} />}
-            {tab === "quiz"     && <QuizResultsTab />}
           </div>
         </main>
       </div>

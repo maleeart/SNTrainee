@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import AppNav from "./AppNav";
 
@@ -345,7 +345,9 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
 
                 {quizResult ? (
                   <div className={`rounded-2xl p-6 text-center border ${quizResult.passed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-                    <div className="text-5xl font-bold mb-1" style={{ color: quizResult.passed ? "#10B981" : "#EF4444" }}>{quizResult.score}%</div>
+                    <div className="text-5xl font-bold mb-1" style={{ color: quizResult.passed ? "#10B981" : "#EF4444" }}>
+                      {quizResult.correct}<span className="text-3xl text-gray-400">/{quizResult.total}</span>
+                    </div>
                     <p className="font-semibold text-lg mb-1" style={{ color: quizResult.passed ? "#059669" : "#DC2626" }}>
                       {quizResult.passed ? "🎉 ผ่านแล้ว!" : "❌ ไม่ผ่าน"}
                     </p>
@@ -430,6 +432,7 @@ function LessonRow({ lesson, index, isAdmin, onOpen, onEdit, onQuiz, onDelete }:
           {lesson.quiz && (
             <span className={`text-xs font-medium ${lesson.quiz.passed ? "text-green-600" : lesson.quiz.bestScore != null ? "text-amber-600" : "text-gray-400"}`}>
               ✏️ แบบทดสอบ{lesson.quiz.bestScore != null ? ` · ${lesson.quiz.bestScore}%` : ""}
+              {lesson.quiz.passed ? " ✓" : ""}
             </span>
           )}
           {!lesson.videoUrl && !lesson.fileUrl && !lesson.quiz && <span className="text-xs text-gray-300">ยังไม่มีเนื้อหา</span>}
@@ -451,6 +454,77 @@ function LessonRow({ lesson, index, isAdmin, onOpen, onEdit, onQuiz, onDelete }:
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+type QuizResult = {
+  id: string; score: number; passed: boolean; correct: number; total: number; createdAt: string;
+  user: { id: string; name: string | null; nickname: string | null };
+  quiz: { lesson: { title: string } };
+};
+
+function CourseQuizResults({ courseId, meId, isAdmin }: { courseId: string; meId: string; isAdmin: boolean }) {
+  const [results, setResults] = useState<QuizResult[] | null>(null);
+
+  useEffect(() => {
+    setResults(null);
+    fetch(`/api/training/results?courseId=${courseId}`)
+      .then(r => r.json())
+      .then(setResults)
+      .catch(() => setResults([]));
+  }, [courseId]);
+
+  if (results === null) return <div className="px-5 py-4 text-xs text-gray-400">กำลังโหลดผลคะแนน...</div>;
+  if (results.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">ยังไม่มีผลแบบทดสอบในหลักสูตรนี้</div>;
+
+  const rows = isAdmin ? results : results.filter(r => r.user.id === meId);
+  if (rows.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">ยังไม่มีผลแบบทดสอบ</div>;
+
+  return (
+    <div className="border-t border-gray-100 mt-0">
+      <div className="px-5 py-3 border-b border-gray-50 bg-gray-50/50">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">ผลแบบทดสอบ · {rows.length} รายการ</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead style={{ background: "#F8FAFF" }}>
+            <tr>
+              {isAdmin && <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400">ผู้ทำ</th>}
+              <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400">หัวข้อ</th>
+              <th className="text-center px-4 py-2 text-xs font-semibold text-gray-400">คะแนน</th>
+              <th className="text-center px-4 py-2 text-xs font-semibold text-gray-400">ผล</th>
+              <th className="text-left px-4 py-2 text-xs font-semibold text-gray-400">วันที่</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(r => (
+              <tr key={r.id} className="hover:bg-gray-50">
+                {isAdmin && (
+                  <td className="px-4 py-2.5">
+                    <p className="text-xs font-medium text-gray-700">{r.user.nickname || r.user.name || "-"}</p>
+                    {r.user.nickname && <p className="text-xs text-gray-400">{r.user.name}</p>}
+                  </td>
+                )}
+                <td className="px-4 py-2.5 text-xs text-gray-600">{r.quiz.lesson.title}</td>
+                <td className="px-4 py-2.5 text-center">
+                  <span className="font-bold text-sm" style={{ color: r.passed ? "#10B981" : "#EF4444" }}>
+                    {r.correct}<span className="text-gray-400 font-normal">/{r.total}</span>
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-center">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                    {r.passed ? "ผ่าน" : "ไม่ผ่าน"}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-xs text-gray-400 whitespace-nowrap">
+                  {new Date(r.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 type AdminModal =
   | { type: "addCourse" }
   | { type: "editCourse"; course: CourseData }
@@ -462,6 +536,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
   initCourses: CourseData[]; meId: string; meRole: string; meName: string; meImage: string | null;
 }) {
   const isAdmin = meRole === "ADMIN";
+  const isAdminOrExec = meRole === "ADMIN" || meRole === "EXECUTIVE";
   const [courses, setCourses] = useState(initCourses);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "course">("list");
@@ -603,6 +678,9 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
                       />
                     ))}
                   </div>
+                )}
+                {selected.lessons.some(l => l.quiz) && (
+                  <CourseQuizResults courseId={selected.id} meId={meId} isAdmin={isAdminOrExec} />
                 )}
               </div>
             ) : (
