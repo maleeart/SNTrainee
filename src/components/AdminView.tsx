@@ -80,6 +80,23 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
   };
 
+  const editUser = async (userId: string, data: Partial<U>): Promise<boolean> => {
+    const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "edit", userId, ...data }) });
+    if (!res.ok) { alert((await res.json().catch(() => ({}))).error ?? "แก้ไขไม่สำเร็จ"); return false; }
+    const u = await res.json();
+    setUsers(prev => prev.map(x => (x.id === userId ? { ...x, ...u } : x)));
+    setDetailUser(prev => (prev && prev.id === userId ? { ...prev, ...u } : prev));
+    return true;
+  };
+
+  const deleteUser = async (userId: string): Promise<boolean> => {
+    const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "delete", userId }) });
+    if (!res.ok) { alert((await res.json().catch(() => ({}))).error ?? "ลบไม่สำเร็จ"); return false; }
+    setUsers(prev => prev.filter(x => x.id !== userId));
+    setReports(prev => prev.filter(r => r.user.id !== userId));
+    return true;
+  };
+
   const NAV: { id: Tab; label: string; badge?: number; icon: React.ReactNode }[] = [
     { id: "overview",  label: "ภาพรวม",           icon: <IconGrid /> },
     { id: "logs",      label: "บันทึกการฝึกงาน",  badge: pending, icon: <IconClipboard /> },
@@ -211,7 +228,8 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           </div>
         </main>
       </div>
-      {detailUser && <UserDetailModal user={detailUser} reports={reports} onClose={() => setDetailUser(null)} />}
+      {detailUser && <UserDetailModal user={detailUser} reports={reports} readOnly={readOnly} meId={meId}
+        onEdit={editUser} onDelete={deleteUser} onClose={() => setDetailUser(null)} />}
       {evalTarget && (
         <EvalModal
           report={evalTarget}
@@ -1133,10 +1151,49 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
 
 // ─── User Detail Modal ────────────────────────────────────────────────────────
 
-function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[]; onClose: () => void }) {
+function UserDetailModal({ user: u, reports, readOnly, meId, onEdit, onDelete, onClose }: {
+  user: U; reports: Rep[]; readOnly: boolean; meId: string;
+  onEdit: (userId: string, data: Partial<U>) => Promise<boolean>;
+  onDelete: (userId: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const mine = reports.filter(r => r.user.id === u.id);
   const allEvals = mine.flatMap(r => r.evaluations);
   const avg = overallAvg(allEvals);
+
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({
+    name: u.name ?? "", nickname: u.nickname ?? "", role: u.role,
+    level: u.level ?? "PVC", school: u.school ?? "", advisor: u.advisor ?? "",
+    startDate: u.startDate ? u.startDate.slice(0, 10) : "",
+    endDate: u.endDate ? u.endDate.slice(0, 10) : "",
+  });
+  const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }));
+  const isStudent = form.role === "STUDENT";
+
+  const save = async () => {
+    if (!form.name.trim()) return alert("กรุณากรอกชื่อ");
+    setBusy(true);
+    const ok = await onEdit(u.id, {
+      name: form.name, nickname: form.nickname, role: form.role,
+      level: isStudent ? form.level : null,
+      school: isStudent ? form.school : null,
+      advisor: isStudent ? form.advisor : null,
+      startDate: isStudent && form.startDate ? form.startDate : null,
+      endDate: isStudent && form.endDate ? form.endDate : null,
+    });
+    setBusy(false);
+    if (ok) setEditing(false);
+  };
+
+  const del = async () => {
+    if (!confirm(`ลบผู้ใช้ "${u.name}" ?\nรายงานและการประเมินทั้งหมดของผู้ใช้จะถูกลบด้วย และไม่สามารถกู้คืนได้`)) return;
+    setBusy(true);
+    const ok = await onDelete(u.id);
+    setBusy(false);
+    if (ok) onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
@@ -1147,32 +1204,103 @@ function UserDetailModal({ user: u, reports, onClose }: { user: U; reports: Rep[
               : <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-white text-2xl font-bold">{u.name?.[0]}</div>}
             <div>
               <p className="text-white font-bold text-lg">{u.name}</p>
-              {u.nickname && <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>"{u.nickname}"</p>}
+              {u.nickname && <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>&quot;{u.nickname}&quot;</p>}
               <span className="text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block" style={{ background: "rgba(255,192,0,0.25)", color: "#FFC000" }}>{ROLE_LABEL[u.role]}</span>
             </div>
           </div>
         </div>
 
-        <div className="p-6 space-y-3 text-sm">
-          <DR label="อีเมล" value={u.email} />
-          {u.level && <DR label="ระดับ" value={LEVEL_LABEL[u.level]} />}
-          {u.school && <DR label="สถานศึกษา" value={u.school} />}
-          {u.advisor && <DR label="อ.นิเทศ" value={u.advisor} />}
-          {u.startDate && <DR label="เริ่มฝึก" value={new Date(u.startDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
-          {u.endDate && <DR label="สิ้นสุด" value={new Date(u.endDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
-
-          <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: "1px solid #f3f4f6" }}>
-            <StatCard label="รายงาน" value={mine.length} />
-            <StatCard label="ถูกประเมิน" value={allEvals.length + " ครั้ง"} />
-            <StatCard label="คะแนนเฉลี่ย" value={avg != null ? avg.toFixed(2) : "—"} />
+        {editing ? (
+          /* ── Edit form ── */
+          <div className="p-6 space-y-3">
+            <Field label="ชื่อ-สกุล *">
+              <input value={form.name} onChange={e => set({ name: e.target.value })} className="ipt" />
+            </Field>
+            <Field label="ชื่อเล่น">
+              <input value={form.nickname} onChange={e => set({ nickname: e.target.value })} className="ipt" />
+            </Field>
+            <Field label="สิทธิ์การใช้งาน">
+              <select value={form.role} onChange={e => set({ role: e.target.value })} className="ipt">
+                {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </Field>
+            {isStudent && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="ระดับ">
+                    <select value={form.level} onChange={e => set({ level: e.target.value })} className="ipt">
+                      {Object.entries(LEVEL_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="สถานศึกษา">
+                    <input value={form.school} onChange={e => set({ school: e.target.value })} className="ipt" />
+                  </Field>
+                </div>
+                <Field label="อาจารย์นิเทศ">
+                  <input value={form.advisor} onChange={e => set({ advisor: e.target.value })} className="ipt" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="เริ่มฝึก">
+                    <input type="date" value={form.startDate} onChange={e => set({ startDate: e.target.value })} className="ipt" />
+                  </Field>
+                  <Field label="สิ้นสุด">
+                    <input type="date" value={form.endDate} onChange={e => set({ endDate: e.target.value })} className="ipt" />
+                  </Field>
+                </div>
+              </>
+            )}
+            <div className="flex gap-2 pt-2">
+              <button disabled={busy} onClick={save} className="flex-1 text-white py-2.5 rounded-xl font-semibold text-sm disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>{busy ? "กำลังบันทึก..." : "บันทึก"}</button>
+              <button disabled={busy} onClick={() => setEditing(false)} className="px-5 py-2.5 rounded-xl font-medium text-sm bg-gray-100 text-gray-600 hover:bg-gray-200">ยกเลิก</button>
+            </div>
+            <style jsx>{`.ipt{width:100%;border:1px solid #e5e7eb;border-radius:0.6rem;padding:0.5rem 0.7rem;font-size:0.875rem;outline:none;background:#fff}.ipt:focus{border-color:#1a56c4}`}</style>
           </div>
-        </div>
+        ) : (
+          /* ── View ── */
+          <>
+            <div className="p-6 space-y-3 text-sm">
+              <DR label="อีเมล" value={u.email} />
+              {u.level && <DR label="ระดับ" value={LEVEL_LABEL[u.level]} />}
+              {u.school && <DR label="สถานศึกษา" value={u.school} />}
+              {u.advisor && <DR label="อ.นิเทศ" value={u.advisor} />}
+              {u.startDate && <DR label="เริ่มฝึก" value={new Date(u.startDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
+              {u.endDate && <DR label="สิ้นสุด" value={new Date(u.endDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} />}
 
-        <div className="px-6 pb-6">
-          <button onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium">ปิด</button>
-        </div>
+              <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: "1px solid #f3f4f6" }}>
+                <StatCard label="รายงาน" value={mine.length} />
+                <StatCard label="ถูกประเมิน" value={allEvals.length + " ครั้ง"} />
+                <StatCard label="คะแนนเฉลี่ย" value={avg != null ? avg.toFixed(2) : "—"} />
+              </div>
+            </div>
+
+            <div className="px-6 pb-6 space-y-2">
+              {!readOnly && (
+                <div className="flex gap-2">
+                  <button onClick={() => setEditing(true)} className="flex-1 text-white py-2.5 rounded-xl font-semibold text-sm"
+                    style={{ background: "linear-gradient(135deg,#1a56c4,#003E8E)" }}>✏️ แก้ไขข้อมูล</button>
+                  {u.id !== meId && (
+                    <button disabled={busy} onClick={del} className="px-4 py-2.5 rounded-xl font-medium text-sm text-red-600 border border-red-200 hover:bg-red-50 disabled:opacity-50">
+                      ลบ
+                    </button>
+                  )}
+                </div>
+              )}
+              <button onClick={onClose} className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium text-sm">ปิด</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-gray-500 mb-1 block">{label}</span>
+      {children}
+    </label>
   );
 }
 
