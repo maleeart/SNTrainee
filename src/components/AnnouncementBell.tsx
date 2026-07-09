@@ -52,8 +52,9 @@ export default function AnnouncementBell() {
     setItems(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
   };
 
-  const markAllRead = async () => {
-    const unread = items.filter(a => !a.read);
+  const markAllRead = async (list = items) => {
+    const unread = list.filter(a => !a.read);
+    if (!unread.length) return;
     await Promise.all(unread.map(a => fetch(`/api/announcements/${a.id}`, { method: "POST" })));
     setItems(prev => prev.map(a => ({ ...a, read: true })));
   };
@@ -64,7 +65,7 @@ export default function AnnouncementBell() {
     <div className="relative" ref={drawerRef}>
       {/* Bell button */}
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setOpen(o => { if (!o) markAllRead(); return !o; }); }}
         className="relative p-2 rounded-xl transition-colors hover:bg-white/10"
         aria-label="ประกาศ"
       >
@@ -98,7 +99,7 @@ export default function AnnouncementBell() {
               )}
             </div>
             {unreadCount > 0 && (
-              <button onClick={markAllRead}
+              <button onClick={() => markAllRead()}
                 className="text-xs text-white/60 hover:text-white transition-colors">
                 อ่านทั้งหมด
               </button>
