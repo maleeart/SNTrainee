@@ -11,8 +11,9 @@ export async function GET(req: Request) {
     const userId = session.user.id;
     const markRead = new URL(req.url).searchParams.get("markread") === "1";
 
+    const isAdmin = ["ADMIN", "EXECUTIVE"].includes(role);
     const announcements = await prisma.announcement.findMany({
-      where: { OR: [{ target: "ALL" }, { target: role }] },
+      where: isAdmin ? {} : { OR: [{ target: "ALL" }, { target: role }] },
       orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
       include: {
         createdBy: { select: { name: true, nickname: true } },
