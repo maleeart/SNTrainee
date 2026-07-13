@@ -1510,6 +1510,9 @@ function AnnounceTab({ readOnly }: { readOnly: boolean }) {
       setTitle(""); setBody(""); setTarget("ALL"); setPinned(false);
       setShowForm(false);
       await load();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`เกิดข้อผิดพลาด: ${err.error ?? res.status}`);
     }
     setSaving(false);
   };
