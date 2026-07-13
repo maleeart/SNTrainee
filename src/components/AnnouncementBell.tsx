@@ -56,8 +56,7 @@ export default function AnnouncementBell() {
   const handleBellClick = () => {
     const opening = !open;
     setOpen(opening);
-    // on open: fetch with markread=1 to atomically read+persist in one request
-    if (opening) load(true);
+    if (opening) load();
   };
 
   const unreadCount = items.filter(a => !a.read).length;

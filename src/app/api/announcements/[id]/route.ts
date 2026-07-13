@@ -8,11 +8,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  await prisma.announcementRead.upsert({
-    where: { announcementId_userId: { announcementId: id, userId: session.user.id } },
-    create: { announcementId: id, userId: session.user.id },
-    update: {},
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "AnnouncementRead" ("announcementId", "userId")
+    VALUES (${id}, ${session.user.id})
+    ON CONFLICT DO NOTHING
+  `;
 
   return NextResponse.json({ ok: true });
 }
