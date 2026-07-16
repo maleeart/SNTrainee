@@ -37,6 +37,22 @@ export const STATUS_COLOR: Record<string, string> = {
   SCORED:  "bg-blue-100 text-blue-700",
 };
 
+// ปุ่มปรับจูนการถ่วงน้ำหนักคะแนนตามจำนวนรายงาน (ใช้เฉพาะตาราง/กราฟจัดอันดับ Admin)
+// k    = ยิ่งมาก คนส่งน้อยยิ่งถูกดึงเข้าค่ากลางแรงขึ้น (ความน่าเชื่อถือ)
+// floor= พื้นน้ำหนักปริมาณงาน 0.6 = "ปานกลาง" (ต่ำกว่านี้ปริมาณกลบคุณภาพ, สูงกว่านี้ปริมาณแทบไม่มีผล)
+// prior= ค่ากลางที่ดึงเข้าหา (กึ่งกลางสเกล 1-5)
+// ponytail: ค่าปรับจูน — ปรับตามข้อมูลจริงหลังใช้งาน
+export const SCORE_WEIGHT = { k: 5, floor: 0.6, prior: 3.0 };
+
+// คะแนนถ่วงน้ำหนัก = shrinkage (ความน่าเชื่อถือ) × volume factor (ความขยัน เทียบคนส่งสูงสุด)
+export function weightedScore(avg: number | null, n: number, nMax: number): number | null {
+  if (avg == null || n <= 0) return null;
+  const { k, floor, prior } = SCORE_WEIGHT;
+  const shrunk = (n * avg + k * prior) / (n + k);
+  const vf = floor + (1 - floor) * (nMax > 0 ? Math.min(1, n / nMax) : 1);
+  return shrunk * vf;
+}
+
 // เกณฑ์ประเมิน 1-5 ต่อหัวข้อ
 export const SCORE_CRITERIA: { key: string; label: string }[] = [
   { key: "skill", label: "ความรู้/ทักษะวิชาชีพ" },

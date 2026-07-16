@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
-import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA } from "@/lib/labels";
+import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
@@ -296,12 +296,18 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
     .slice(0, 8);
 
+  const nMax = Math.max(1, ...students.map(s => reports.filter(r => r.user.id === s.id).length));
   const studentStats = students.map(s => {
-    const mine = reports.filter(r => r.user.id === s.id);
+    const mine = reports.filter(r => r.user.id === s.id).sort((a, b) => b.date.localeCompare(a.date));
     const allEvals = mine.flatMap(r => r.evaluations);
     const avg = overallAvg(allEvals);
-    return { student: s, reportCount: mine.length, evalCount: allEvals.length, avg };
-  }).filter(s => s.reportCount > 0);
+    return {
+      student: s, reportCount: mine.length, evalCount: allEvals.length, avg,
+      weighted: weightedScore(avg, mine.length, nMax),
+      lastDate: mine[0]?.date.slice(0, 10),
+    };
+  }).sort((a, b) => (b.weighted ?? -1) - (a.weighted ?? -1));
+  const scoredStats = studentStats.filter(s => s.reportCount > 0);
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 
@@ -396,11 +402,11 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
       )}
 
       {/* Score chart */}
-      {studentStats.length > 0 && (
+      {scoredStats.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-sm font-bold mb-0.5" style={{ color: "#003E8E" }}>คะแนนเฉลี่ยรายนักศึกษาฝึกงาน</h2>
-          <p className="text-xs text-gray-400 mb-6">เฉลี่ยจากทุกหมวดคะแนน · สเกล 1–5</p>
-          <ScoreBarChart stats={studentStats} />
+          <h2 className="text-sm font-bold mb-0.5" style={{ color: "#003E8E" }}>คะแนนถ่วงน้ำหนักรายนักศึกษาฝึกงาน</h2>
+          <p className="text-xs text-gray-400 mb-6">ถ่วงน้ำหนักตามจำนวนรายงานที่ส่ง (ยิ่งส่งเยอะยิ่งน่าเชื่อถือ) · เรียงจากสูงสุด</p>
+          <ScoreBarChart stats={scoredStats} />
         </div>
       )}
 
@@ -412,25 +418,23 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead style={{ background: "#F4F6FB" }}>
-              <tr><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนเฉลี่ย</Th><Th>ล่าสุด</Th></tr>
+              <tr><Th>อันดับ</Th><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนดิบ</Th><Th>ถ่วงน้ำหนัก</Th><Th>ล่าสุด</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {students.map(s => {
-                const mine = reports.filter(r => r.user.id === s.id).sort((a, b) => b.date.localeCompare(a.date));
-                const allEvals = mine.flatMap(r => r.evaluations);
-                const avg = overallAvg(allEvals);
-                const lastDate = mine[0]?.date.slice(0, 10);
+              {studentStats.map(({ student: s, reportCount, evalCount, avg, weighted, lastDate }, i) => {
                 const isInactive = !lastDate || lastDate < sevenDaysAgo;
                 return (
                   <tr key={s.id} className="hover:bg-gray-50">
+                    <Td><span className="text-gray-400">{reportCount > 0 ? i + 1 : "—"}</span></Td>
                     <Td>
                       <span className="font-medium text-gray-800">{s.name}</span>
                       {s.nickname && <span className="text-xs text-gray-400 ml-1">({s.nickname})</span>}
                     </Td>
                     <Td>{s.level ? LEVEL_LABEL[s.level] : "—"}</Td>
-                    <Td>{mine.length}</Td>
-                    <Td>{allEvals.length} ครั้ง</Td>
-                    <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{avg != null ? avg.toFixed(2) : "—"}</span></Td>
+                    <Td>{reportCount}</Td>
+                    <Td>{evalCount} ครั้ง</Td>
+                    <Td><span className="text-gray-500">{avg != null ? avg.toFixed(2) : "—"}</span></Td>
+                    <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{weighted != null ? weighted.toFixed(2) : "—"}</span></Td>
                     <Td>
                       {lastDate
                         ? <span className={`text-xs ${isInactive ? "font-semibold" : "text-gray-400"}`} style={isInactive ? { color: "#C2410C" } : {}}>
@@ -449,7 +453,7 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
   );
 }
 
-function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; evalCount: number; avg: number | null }[] }) {
+function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; evalCount: number; avg: number | null; weighted: number | null }[] }) {
   const maxScore = 5;
   const BAR_H = 44;
   const GAP = 14;
@@ -494,9 +498,9 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
           );
         })}
 
-        {stats.map(({ student, evalCount, avg }, i) => {
+        {stats.map(({ student, evalCount, avg, weighted }, i) => {
           const y = 10 + i * (BAR_H + GAP);
-          const barW = avg != null ? (avg / maxScore) * BAR_AREA : 0;
+          const barW = weighted != null ? (weighted / maxScore) * BAR_AREA : 0;
           const shortName = (student.name ?? "").split(" ").slice(-1)[0] || student.name || "";
           const displayName = student.nickname ? `${shortName} (${student.nickname})` : shortName;
 
@@ -511,23 +515,28 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
               <rect x={NAME_W + 8} y={y + 4} width={BAR_AREA} height={BAR_H - 8} rx="8" fill="url(#bar-bg)" />
 
               {/* Score bar */}
-              {avg != null && barW > 0 && (
+              {weighted != null && barW > 0 && (
                 <rect x={NAME_W + 8} y={y + 4} width={barW} height={BAR_H - 8} rx="8" fill={`url(#bar-grad-${i})`}>
                   <animate attributeName="width" from="0" to={barW} dur="0.7s" fill="freeze" begin={`${i * 0.1}s`} />
                 </rect>
               )}
 
               {/* Eval count badge inside bar */}
-              {avg != null && evalCount > 0 && barW > 60 && (
+              {weighted != null && evalCount > 0 && barW > 60 && (
                 <text x={NAME_W + 16} y={y + BAR_H / 2 + 1} dominantBaseline="middle" fontSize="10" fill="rgba(255,255,255,0.8)">
                   {evalCount} ครั้ง
                 </text>
               )}
 
-              {/* Score label */}
-              <text x={NAME_W + 8 + BAR_AREA + 8} y={y + BAR_H / 2 + 1} dominantBaseline="middle" fontSize="14" fontWeight="700" fill="#003E8E">
-                {avg != null ? avg.toFixed(2) : "—"}
+              {/* Score label: weighted (big) + raw avg (small) */}
+              <text x={NAME_W + 8 + BAR_AREA + 8} y={y + BAR_H / 2 - 4} dominantBaseline="middle" fontSize="14" fontWeight="700" fill="#003E8E">
+                {weighted != null ? weighted.toFixed(2) : "—"}
               </text>
+              {avg != null && (
+                <text x={NAME_W + 8 + BAR_AREA + 8} y={y + BAR_H / 2 + 10} dominantBaseline="middle" fontSize="9" fill="#9CA3AF">
+                  ดิบ {avg.toFixed(1)}
+                </text>
+              )}
             </g>
           );
         })}
