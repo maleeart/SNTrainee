@@ -38,22 +38,50 @@ export const STATUS_COLOR: Record<string, string> = {
 };
 
 // ปุ่มปรับจูนการถ่วงน้ำหนักคะแนนตามจำนวนรายงาน (ใช้เฉพาะตาราง/กราฟจัดอันดับ Admin)
-// k    = ยิ่งมาก คนส่งน้อยยิ่งถูกดึงเข้าค่ากลางแรงขึ้น (ความน่าเชื่อถือ)
-// floor= พื้นน้ำหนักปริมาณงาน 0.6 = "ปานกลาง" (ต่ำกว่านี้ปริมาณกลบคุณภาพ, สูงกว่านี้ปริมาณแทบไม่มีผล)
-// prior= ค่ากลางที่ดึงเข้าหา (กึ่งกลางสเกล 1-5)
+// k        = ยิ่งมาก คนส่งน้อยยิ่งถูกดึงเข้าค่ากลางแรงขึ้น (ความน่าเชื่อถือ)
+// floor    = พื้นน้ำหนักปริมาณงาน 0.6 = "ปานกลาง" (ต่ำกว่านี้ปริมาณกลบคุณภาพ, สูงกว่านี้ปริมาณแทบไม่มีผล)
+// prior    = ค่ากลางที่ดึงเข้าหา (กึ่งกลางสเกล 1-5)
+// passRatio= เกณฑ์ผ่าน = 80% ของจำนวนรายงานสูงสุดในกลุ่ม
 // ponytail: ค่าปรับจูน — ปรับตามข้อมูลจริงหลังใช้งาน
-export const SCORE_WEIGHT = { k: 5, floor: 0.6, prior: 3.0 };
+export const SCORE_WEIGHT = { k: 5, floor: 0.6, prior: 3.0, passRatio: 0.8 };
 
-// คะแนนถ่วงน้ำหนัก = shrinkage (ความน่าเชื่อถือ) × volume factor (ความขยัน เทียบคนส่งสูงสุด)
+// เส้นผ่าน = 80% ของคนที่ส่งรายงานสูงสุด (ปัดขึ้น)
+export function passBar(nMax: number): number {
+  return Math.ceil(SCORE_WEIGHT.passRatio * Math.max(0, nMax));
+}
+
+// คะแนนถ่วงน้ำหนัก = shrinkage (ความน่าเชื่อถือ) × volume factor (ความขยัน)
+// volume factor เต็ม 1.0 เมื่อส่งถึง "เส้นผ่าน" — ไม่ต้องไล่ตามคนที่ส่งสูงสุด
+// และส่งเกินเส้นไม่ได้แต้มเพิ่ม → ปั่นรายงานขยะเพื่อไต่อันดับไม่ได้
 export function weightedScore(avg: number | null, n: number, nMax: number): number | null {
   if (avg == null || n <= 0) return null;
   const { k, floor, prior } = SCORE_WEIGHT;
   const shrunk = (n * avg + k * prior) / (n + k);
-  const vf = floor + (1 - floor) * (nMax > 0 ? Math.min(1, n / nMax) : 1);
+  const bar = passBar(nMax);
+  const vf = floor + (1 - floor) * (bar > 0 ? Math.min(1, n / bar) : 1);
   return shrunk * vf;
 }
 
+// โบนัส quiz "โจทย์หน้างาน" — เสริมทับคะแนนพี่เลี้ยง บวกได้อย่างเดียว ไม่มีทางติดลบ
+// ไม่มีโจทย์ในช่วงที่เขาฝึก → null → คะแนนเท่าเดิมเป๊ะ
+// มีโจทย์แต่ไม่ทำ → นับ 0 (ได้โบนัสน้อยลง แต่ไม่ต่ำกว่าที่พี่เลี้ยงให้)
+export const QUIZ_BONUS_MAX = 0.5;
+
+// quizAvg = เฉลี่ยคะแนน "ครั้งแรก" 0-100 ของทุกโจทย์ที่ตั้งช่วงเขาฝึกอยู่ (ไม่ทำ = 0)
+export function quizBonus(quizAvg: number | null): number {
+  if (quizAvg == null) return 0;
+  return (Math.min(100, Math.max(0, quizAvg)) / 100) * QUIZ_BONUS_MAX;
+}
+
+// คะแนนดิบหลังเสริม quiz — ตัดที่ 5.00 เพื่อคงสเกล 1-5
+export function withQuizBonus(mentorAvg: number | null, quizAvg: number | null): number | null {
+  if (mentorAvg == null) return null;
+  return Math.min(5, mentorAvg + quizBonus(quizAvg));
+}
+
 // เกณฑ์ประเมิน 1-5 ต่อหัวข้อ
+// ⚠️ array นี้สร้างฟอร์มให้พี่เลี้ยงกรอกคะแนน — ห้ามเติม "ความรู้/quiz" เข้ามา
+// เพราะ quiz มาจากระบบอัตโนมัติ ไม่ใช่สิ่งที่พี่เลี้ยงนั่งให้คะแนนเอง
 export const SCORE_CRITERIA: { key: string; label: string }[] = [
   { key: "skill", label: "ความรู้/ทักษะวิชาชีพ" },
   { key: "safety", label: "ความปลอดภัย (PPE/ขั้นตอน)" },

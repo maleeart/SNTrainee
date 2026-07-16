@@ -19,8 +19,12 @@ export default async function TrainingPage() {
     }
   });
 
+  // พี่เลี้ยงตั้งโจทย์เองได้ จึงต้องเห็นเฉลย — นักศึกษาห้ามเห็นเด็ดขาด
+  const canSeeAnswers = u.role === "ADMIN" || u.role === "MENTOR";
+
   const data = courses.map(c => ({
     id: c.id, title: c.title, description: c.description, emoji: c.emoji, order: c.order,
+    fieldQuiz: c.fieldQuiz,
     lessons: c.lessons.map(l => ({
       id: l.id, title: l.title, order: l.order,
       videoUrl: l.videoUrl, fileUrl: l.fileUrl, fileName: l.fileName,
@@ -28,7 +32,7 @@ export default async function TrainingPage() {
       quiz: l.quiz ? {
         id: l.quiz.id, passScore: l.quiz.passScore,
         questions: (l.quiz.questions as { q: string; options: string[]; answer: number }[]).map(
-          ({ q, options, answer }) => u.role === "ADMIN" ? { q, options, answer } : { q, options }
+          ({ q, options, answer }) => canSeeAnswers ? { q, options, answer } : { q, options }
         ),
         bestScore: l.quiz.attempts[0]?.score ?? null,
         passed: l.quiz.attempts[0]?.passed ?? false,

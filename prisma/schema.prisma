@@ -90,6 +90,7 @@ model User {
   announcementReads    AnnouncementRead[] @relation("AnnouncementReads")
 
   coursesCreated Course[]         @relation("CourseAuthor")
+  lessonsCreated CourseLesson[]   @relation("LessonAuthor")
   lessonProgress LessonProgress[] @relation("LessonProgress")
   quizAttempts   QuizAttempt[]    @relation("QuizAttempts")
 
@@ -162,6 +163,7 @@ model Course {
   description String?        @db.Text
   emoji       String         @default("📋")
   order       Int            @default(0)
+  fieldQuiz   Boolean        @default(false) // คอร์ส "โจทย์หน้างาน" (มีอันเดียว สร้างอัตโนมัติ)
   createdAt   DateTime       @default(now())
   createdById String
   createdBy   User           @relation("CourseAuthor", fields: [createdById], references: [id])
@@ -169,16 +171,19 @@ model Course {
 }
 
 model CourseLesson {
-  id       String  @id @default(cuid())
-  courseId String
-  course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  title    String
-  order    Int     @default(0)
-  videoUrl String?
-  fileUrl  String?
-  fileName String?
-  quiz     LessonQuiz?
-  progress LessonProgress[]
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  order       Int      @default(0)
+  videoUrl    String?
+  fileUrl     String?
+  fileName    String?
+  createdAt   DateTime @default(now()) // ตั้งโจทย์เมื่อไหร่ — ใช้คิดว่าโจทย์นี้อยู่ในช่วงฝึกของใคร
+  createdById String? // ใครตั้งโจทย์ (null = บทเรียนเก่าก่อนมีฟีเจอร์นี้)
+  createdBy   User?    @relation("LessonAuthor", fields: [createdById], references: [id])
+  quiz        LessonQuiz?
+  progress    LessonProgress[]
 }
 
 model LessonQuiz {

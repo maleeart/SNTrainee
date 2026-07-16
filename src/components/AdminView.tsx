@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
-import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore } from "@/lib/labels";
+import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, QUIZ_BONUS_MAX } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
@@ -18,6 +18,8 @@ type Rep = {
   user: { id: string; name: string | null; nickname: string | null; level: string | null; school: string | null };
   evaluations: EvalRecord[];
 };
+
+type FieldQuiz = { id: string; title: string; createdAt: string; firstScores: Record<string, number> };
 
 type Tab = "overview" | "logs" | "export" | "users" | "announce" | "attendance";
 
@@ -39,8 +41,21 @@ function overallAvg(evals: EvalRecord[]): number | null {
   return all.length ? all.reduce((a, b) => a + b, 0) / all.length : null;
 }
 
-export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports }: {
-  readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[];
+// เฉลี่ยคะแนน quiz ครั้งแรก 0-100 ของโจทย์ที่ตั้ง "ช่วงที่นักศึกษาคนนี้ฝึกอยู่" (ไม่ทำ = 0)
+// ไม่มีโจทย์ในช่วงของเขาเลย → null → ไม่มีโบนัส คะแนนเท่าเดิม
+function quizAvgFor(s: U, quizzes: FieldQuiz[]): number | null {
+  const from = s.startDate?.slice(0, 10);
+  const to = s.endDate?.slice(0, 10);
+  const mine = quizzes.filter(q => {
+    const d = q.createdAt.slice(0, 10);
+    return (!from || d >= from) && (!to || d <= to);
+  });
+  if (!mine.length) return null;
+  return mine.reduce((sum, q) => sum + (q.firstScores[s.id] ?? 0), 0) / mine.length;
+}
+
+export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports, quizzes = [] }: {
+  readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[]; quizzes?: FieldQuiz[];
 }) {
   const router = useRouter();
   const [users, setUsers] = useState<U[]>(initUsers);
@@ -237,9 +252,9 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           })()}
 
           <div className="p-5 md:p-6 max-w-6xl mx-auto">
-            {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} />}
+            {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
             {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
-            {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} />}
+            {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
             {tab === "announce"   && <AnnounceTab readOnly={readOnly} />}
             {tab === "attendance" && <AttendanceTab />}
@@ -262,7 +277,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
+function OverviewTab({ reports, students, quizzes }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[] }) {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
 
@@ -297,14 +312,18 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     .slice(0, 8);
 
   const nMax = Math.max(1, ...students.map(s => reports.filter(r => r.user.id === s.id).length));
+  const bar = passBar(nMax); // เกณฑ์ผ่าน = 80% ของคนส่งสูงสุด
   const studentStats = students.map(s => {
     const mine = reports.filter(r => r.user.id === s.id).sort((a, b) => b.date.localeCompare(a.date));
     const allEvals = mine.flatMap(r => r.evaluations);
-    const avg = overallAvg(allEvals);
+    const mentorAvg = overallAvg(allEvals);
+    const quizAvg = quizAvgFor(s, quizzes);
+    const avg = withQuizBonus(mentorAvg, quizAvg); // คะแนนดิบ = พี่เลี้ยง + โบนัส quiz (ตัดที่ 5)
     return {
-      student: s, reportCount: mine.length, evalCount: allEvals.length, avg,
+      student: s, reportCount: mine.length, evalCount: allEvals.length, avg, mentorAvg, quizAvg,
       weighted: weightedScore(avg, mine.length, nMax),
       lastDate: mine[0]?.date.slice(0, 10),
+      shortBy: Math.max(0, bar - mine.length), // ขาดอีกกี่ฉบับถึงเกณฑ์
     };
   }).sort((a, b) => (b.weighted ?? -1) - (a.weighted ?? -1));
   const scoredStats = studentStats.filter(s => s.reportCount > 0);
@@ -414,14 +433,17 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-50">
           <h2 className="text-sm font-bold text-gray-800">สรุปรายนักศึกษา</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            เกณฑ์: ส่งรายงานอย่างน้อย 80% ของคนที่ส่งสูงสุด · <span style={{ color: "#16A34A" }}>●</span> = ปกติ · ถึงเกณฑ์แล้วได้น้ำหนักเต็ม ส่งเกินไม่ได้แต้มเพิ่ม
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead style={{ background: "#F4F6FB" }}>
-              <tr><Th>อันดับ</Th><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>คะแนนดิบ</Th><Th>ถ่วงน้ำหนัก</Th><Th>ล่าสุด</Th></tr>
+              <tr><Th>อันดับ</Th><Th>ชื่อ</Th><Th>ระดับ</Th><Th>รายงาน</Th><Th>ถูกประเมิน</Th><Th>quiz</Th><Th>คะแนนดิบ</Th><Th>ถ่วงน้ำหนัก</Th><Th>ล่าสุด</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {studentStats.map(({ student: s, reportCount, evalCount, avg, weighted, lastDate }, i) => {
+              {studentStats.map(({ student: s, reportCount, evalCount, avg, mentorAvg, quizAvg, weighted, lastDate, shortBy }, i) => {
                 const isInactive = !lastDate || lastDate < sevenDaysAgo;
                 return (
                   <tr key={s.id} className="hover:bg-gray-50">
@@ -431,8 +453,24 @@ function OverviewTab({ reports, students }: { reports: Rep[]; students: U[] }) {
                       {s.nickname && <span className="text-xs text-gray-400 ml-1">({s.nickname})</span>}
                     </Td>
                     <Td>{s.level ? LEVEL_LABEL[s.level] : "—"}</Td>
-                    <Td>{reportCount}</Td>
+                    <Td>
+                      <span className={shortBy > 0 ? "font-semibold" : ""} style={shortBy > 0 ? { color: "#C2410C" } : {}}>{reportCount}</span>
+                      {reportCount > 0 && (shortBy > 0
+                        ? <span className="block text-xs mt-0.5 whitespace-nowrap" style={{ color: "#C2410C" }}>⚠️ ควรส่งรายงานเพิ่ม</span>
+                        : <span className="ml-1.5 text-xs" style={{ color: "#16A34A" }} title="ส่งรายงานตามเกณฑ์">●</span>
+                      )}
+                    </Td>
                     <Td>{evalCount} ครั้ง</Td>
+                    <Td>
+                      {quizAvg == null
+                        ? <span className="text-gray-300 text-xs" title="ไม่มีโจทย์หน้างานในช่วงที่ฝึก">—</span>
+                        : <span className="text-xs">
+                            {Math.round(quizAvg)}%
+                            {avg != null && mentorAvg != null && avg > mentorAvg && (
+                              <span className="ml-1" style={{ color: "#16A34A" }}>+{(avg - mentorAvg).toFixed(2)}</span>
+                            )}
+                          </span>}
+                    </Td>
                     <Td><span className="text-gray-500">{avg != null ? avg.toFixed(2) : "—"}</span></Td>
                     <Td><span className="font-semibold" style={{ color: "#003E8E" }}>{weighted != null ? weighted.toFixed(2) : "—"}</span></Td>
                     <Td>
@@ -689,7 +727,7 @@ function LogsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: st
                   <div className="px-5 py-3 bg-gray-50/50 flex items-center gap-4 flex-wrap">
                     <span className="text-xs text-gray-500">👥 ประเมินแล้ว {r.evaluations.length} คน</span>
                     {avg != null && (
-                      <span className="text-sm font-bold" style={{ color: "#003E8E" }}>คะแนนเฉลี่ย {avg.toFixed(2)} / 5.00</span>
+                      <span className="text-sm font-bold" style={{ color: "#003E8E" }}>คะแนนรายงานฉบับนี้ {avg.toFixed(2)} / 5.00</span>
                     )}
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
                       {r.evaluations.map(e => (
@@ -811,16 +849,26 @@ function ScoreColor(v: number | null): { bg: string; fg: string } {
   return { bg: "#FEE2E2", fg: "#B91C1C" };
 }
 
-function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
+function ExportTab({ reports, students, quizzes }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[] }) {
   const [selectedStudentId, setSelectedStudentId] = useState("ALL");
 
+  // ถ่วงน้ำหนักด้วยสูตร + nMax เดียวกับหน้าภาพรวม เพื่อให้ตัวเลขตรงกันทุกหน้า
+  const nMax = Math.max(1, ...students.map(s => reports.filter(r => r.user.id === s.id).length));
   const studentStats = students.map(s => {
     const mine = reports.filter(r => r.user.id === s.id);
     const allEvals = mine.flatMap(r => r.evaluations);
-    const criteria = avgPerCriteria(allEvals);
-    const overall = overallAvg(allEvals);
-    return { student: s, mine, allEvals, criteria, overall };
-  });
+    const rawCriteria = avgPerCriteria(allEvals);
+    const criteria: Record<string, number> = {};
+    for (const c of SCORE_CRITERIA) {
+      const w = weightedScore(rawCriteria[c.key] ?? null, mine.length, nMax);
+      if (w != null) criteria[c.key] = w;
+    }
+    // โบนัส quiz เสริมที่คะแนนรวม ไม่แตะรายหมวดของพี่เลี้ยง
+    const quizAvg = quizAvgFor(s, quizzes);
+    const rawOverall = withQuizBonus(overallAvg(allEvals), quizAvg);
+    const overall = weightedScore(rawOverall, mine.length, nMax);
+    return { student: s, mine, allEvals, criteria, quizAvg, rawOverall, overall };
+  }).sort((a, b) => (b.overall ?? -1) - (a.overall ?? -1));
 
   // Summary stats
   const totalReports = reports.length;
@@ -834,26 +882,28 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
     const name = studentId === "ALL" ? "ทั้งหมด" : (students.find(s => s.id === studentId)?.name ?? studentId);
 
     // ── Sheet 1: ผลการประเมินรายบุคคล ──────────────────────────────────────────
-    const s1Head = ["#", "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
+    const s1Head = ["อันดับ", "ชื่อ-สกุล", "ชื่อเล่น", "ระดับ", "สถานศึกษา",
       "บันทึก", "การประเมิน",
-      ...CRITERIA_SHORT.map(s => `คะแนน: ${s}`),
-      "เฉลี่ยรวม"];
+      ...CRITERIA_SHORT.map(s => `ถ่วงน้ำหนัก: ${s}`),
+      "quiz (%)", "เฉลี่ยรวม (ถ่วงน้ำหนัก)", "เฉลี่ยรวม (ดิบ+โบนัส)"];
     const s1Rows: (string | number)[][] = [s1Head];
-    studentStats.forEach(({ student: s, mine, allEvals, criteria, overall }, i) => {
+    studentStats.forEach(({ student: s, mine, allEvals, criteria, quizAvg, rawOverall, overall }, i) => {
       s1Rows.push([
         i + 1, s.name ?? "", s.nickname ?? "",
         s.level ? LEVEL_LABEL[s.level] : "", s.school ?? "",
         mine.length, allEvals.length,
         ...SCORE_CRITERIA.map(c => criteria[c.key] != null ? +criteria[c.key].toFixed(2) : ""),
+        quizAvg != null ? Math.round(quizAvg) : "",
         overall != null ? +overall.toFixed(2) : "",
+        rawOverall != null ? +rawOverall.toFixed(2) : "",
       ]);
     });
     const ws1 = XLSX.utils.aoa_to_sheet(s1Rows);
     ws1["!cols"] = [
-      { wch: 4 }, { wch: 22 }, { wch: 10 }, { wch: 7 }, { wch: 20 },
+      { wch: 6 }, { wch: 22 }, { wch: 10 }, { wch: 7 }, { wch: 20 },
       { wch: 7 }, { wch: 9 },
-      ...CRITERIA_SHORT.map(() => ({ wch: 12 })),
-      { wch: 10 },
+      ...CRITERIA_SHORT.map(() => ({ wch: 14 })),
+      { wch: 9 }, { wch: 20 }, { wch: 20 },
     ];
 
     // ── Sheet 2: รายการบันทึกฝึกงาน ────────────────────────────────────────────
@@ -1017,7 +1067,7 @@ function ExportTab({ reports, students }: { reports: Rep[]; students: U[] }) {
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 flex-wrap gap-2">
           <div>
             <h2 className="text-base font-bold" style={{ color: "#003E8E" }}>ตารางเปรียบเทียบรายหมวด</h2>
-            <p className="text-xs text-gray-400">เฉลี่ยจากทุกรายงานและทุกพี่เลี้ยง · สเกล 1–5</p>
+            <p className="text-xs text-gray-400">ถ่วงน้ำหนักตามจำนวนรายงานที่ส่ง · ตรงกับหน้าภาพรวม · สเกล 1–5</p>
           </div>
           <button onClick={() => exportXlsx("ALL")}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium text-white"
@@ -1297,7 +1347,7 @@ function UserDetailModal({ user: u, reports, readOnly, meId, onEdit, onDelete, o
               <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: "1px solid #f3f4f6" }}>
                 <StatCard label="รายงาน" value={mine.length} />
                 <StatCard label="ถูกประเมิน" value={allEvals.length + " ครั้ง"} />
-                <StatCard label="คะแนนเฉลี่ย" value={avg != null ? avg.toFixed(2) : "—"} />
+                <StatCard label="คะแนนดิบ" value={avg != null ? avg.toFixed(2) : "—"} />
               </div>
             </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AppNav from "./AppNav";
 
 type QuizQ = { q: string; options: string[]; answer?: number };
@@ -15,6 +16,7 @@ type LessonData = {
 
 type CourseData = {
   id: string; title: string; description: string | null; emoji: string; order: number;
+  fieldQuiz?: boolean;
   lessons: LessonData[];
 };
 
@@ -166,11 +168,13 @@ function LessonFormModal({ initial, onClose, onSave }: {
 
 // ── Quiz builder ──────────────────────────────────────────────────────────────
 
-function QuizBuilderModal({ lesson, onClose, onSave }: {
+function QuizBuilderModal({ lesson, titleEditable, onClose, onSave }: {
   lesson: LessonData;
+  titleEditable?: boolean; // โจทย์หน้างาน: ยังไม่มีบทเรียน ต้องตั้งชื่อไปพร้อมกัน
   onClose: () => void;
-  onSave: (d: { passScore: number; questions: QuizQ[] }) => Promise<void>;
+  onSave: (d: { passScore: number; questions: QuizQ[]; title: string }) => Promise<void>;
 }) {
+  const [title, setTitle] = useState(lesson.title);
   const [passScore, setPassScore] = useState(lesson.quiz?.passScore ?? 70);
   const [questions, setQuestions] = useState<(QuizQ & { answer: number })[]>(
     lesson.quiz?.questions.length
@@ -185,11 +189,18 @@ function QuizBuilderModal({ lesson, onClose, onSave }: {
   const setOpt = (qi: number, oi: number, val: string) =>
     setQ(qi, { options: questions[qi].options.map((o, j) => j === oi ? val : o) });
 
-  const valid = questions.every(q => q.q.trim() && q.options.every(o => o.trim()));
+  const valid = questions.every(q => q.q.trim() && q.options.every(o => o.trim())) && (!titleEditable || title.trim().length > 0);
 
   return (
-    <ModalShell title={`ข้อสอบ: ${lesson.title}`} onClose={onClose} wide>
+    <ModalShell title={titleEditable ? "ตั้งโจทย์หน้างาน" : `ข้อสอบ: ${lesson.title}`} onClose={onClose} wide>
       <div className="p-5 overflow-y-auto" style={{ maxHeight: "65vh" }}>
+        {titleEditable && (
+          <div className="mb-4">
+            <label className="text-sm text-gray-600 block mb-1.5">เรื่อง / สิ่งที่เจอหน้างาน</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} className={IPT}
+              placeholder="เช่น ตู้ MDB ชั้น 3 สายเมนหลวม" autoFocus />
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
           <span className="text-sm text-gray-600">เกณฑ์ผ่าน</span>
           <input type="number" min={50} max={100} value={passScore} onChange={e => setPassScore(Number(e.target.value))}
@@ -230,7 +241,7 @@ function QuizBuilderModal({ lesson, onClose, onSave }: {
       </div>
 
       <div className="px-5 pb-5 flex gap-2 border-t border-gray-100 pt-4">
-        <button disabled={busy || !valid} onClick={async () => { setBusy(true); await onSave({ passScore, questions }); setBusy(false); }}
+        <button disabled={busy || !valid} onClick={async () => { setBusy(true); await onSave({ passScore, questions, title: title.trim() }); setBusy(false); }}
           className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50" style={{ background: "#003E8E" }}>
           {busy ? "กำลังบันทึก..." : `บันทึก ${questions.length} ข้อ`}
         </button>
@@ -530,12 +541,19 @@ type AdminModal =
   | { type: "editCourse"; course: CourseData }
   | { type: "addLesson"; course: CourseData }
   | { type: "editLesson"; lesson: LessonData; course: CourseData }
-  | { type: "quiz"; lesson: LessonData };
+  | { type: "quiz"; lesson: LessonData }
+  | { type: "fieldQuiz" };
+
+const BLANK_LESSON: LessonData = {
+  id: "", title: "", order: 0, videoUrl: null, fileUrl: null, fileName: null, completed: false, quiz: null,
+};
 
 export default function TrainingView({ initCourses, meId, meRole, meName, meImage }: {
   initCourses: CourseData[]; meId: string; meRole: string; meName: string; meImage: string | null;
 }) {
+  const router = useRouter();
   const isAdmin = meRole === "ADMIN";
+  const canSetFieldQuiz = meRole === "ADMIN" || meRole === "MENTOR";
   const isAdminOrExec = meRole === "ADMIN" || meRole === "EXECUTIVE";
   const [courses, setCourses] = useState(initCourses);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -574,6 +592,13 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
               className="text-sm px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors">
               ← กลับ
             </Link>
+            {canSetFieldQuiz && (
+              <button onClick={() => setAdminModal({ type: "fieldQuiz" })}
+                className="text-sm px-4 py-1.5 rounded-xl font-medium border"
+                style={{ borderColor: "#003E8E", color: "#003E8E", background: "white" }}>
+                📍 ตั้งโจทย์ด่วน
+              </button>
+            )}
             {isAdmin && (
               <button onClick={() => setAdminModal({ type: "addCourse" })}
                 className="text-sm px-4 py-1.5 rounded-xl text-white font-medium" style={{ background: "#003E8E" }}>
@@ -753,6 +778,18 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
           const newQuiz = { id: q.id, passScore: q.passScore, questions: q.questions as QuizQ[], bestScore: adminModal.lesson.quiz?.bestScore ?? null, passed: adminModal.lesson.quiz?.passed ?? false };
           setCourses(p => p.map(c => ({ ...c, lessons: c.lessons.map(l => l.id === adminModal.lesson.id ? { ...l, quiz: newQuiz } : l) })));
           setAdminModal(null);
+        }} />
+      )}
+
+      {canSetFieldQuiz && adminModal?.type === "fieldQuiz" && (
+        <QuizBuilderModal lesson={BLANK_LESSON} titleEditable onClose={() => setAdminModal(null)} onSave={async d => {
+          const res = await fetch("/api/training/field-quiz", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: d.title, passScore: d.passScore, questions: d.questions }),
+          });
+          if (!res.ok) { alert((await res.json().catch(() => null))?.error ?? "ไม่สำเร็จ"); return; }
+          setAdminModal(null);
+          router.refresh(); // ให้คอร์ส "โจทย์หน้างาน" โผล่มาเลย (อาจเพิ่งถูกสร้างครั้งแรก)
         }} />
       )}
     </div>
