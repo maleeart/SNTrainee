@@ -548,17 +548,25 @@ const BLANK_LESSON: LessonData = {
   id: "", title: "", order: 0, videoUrl: null, fileUrl: null, fileName: null, completed: false, quiz: null,
 };
 
-export default function TrainingView({ initCourses, meId, meRole, meName, meImage }: {
+export default function TrainingView({ initCourses, meId, meRole, meName, meImage, openLessonId = null }: {
   initCourses: CourseData[]; meId: string; meRole: string; meName: string; meImage: string | null;
+  openLessonId?: string | null; // มาจาก /training?lesson=<id> — เด้งเข้าโจทย์นั้นเลย
 }) {
   const router = useRouter();
   const isAdmin = meRole === "ADMIN";
   const canSetFieldQuiz = meRole === "ADMIN" || meRole === "MENTOR";
   const isAdminOrExec = meRole === "ADMIN" || meRole === "EXECUTIVE";
+  // โจทย์ที่ deep-link มาจาก /training?lesson=<id> — เปิดค้างไว้ตั้งแต่ render แรก
+  const deepLink = openLessonId
+    ? initCourses
+        .flatMap(c => c.lessons.map(l => ({ lesson: l, courseId: c.id })))
+        .find(x => x.lesson.id === openLessonId) ?? null
+    : null;
+
   const [courses, setCourses] = useState(initCourses);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mobilePane, setMobilePane] = useState<"list" | "course">("list");
-  const [lessonModal, setLessonModal] = useState<{ lesson: LessonData; courseId: string } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(deepLink?.courseId ?? null);
+  const [mobilePane, setMobilePane] = useState<"list" | "course">(deepLink ? "course" : "list");
+  const [lessonModal, setLessonModal] = useState<{ lesson: LessonData; courseId: string } | null>(deepLink);
   const [adminModal, setAdminModal] = useState<AdminModal | null>(null);
 
   const selected = courses.find(c => c.id === selectedId) ?? null;

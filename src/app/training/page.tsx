@@ -2,9 +2,12 @@ import { requireUser } from "@/lib/guards";
 import { prisma } from "@/lib/prisma";
 import TrainingView from "@/components/TrainingView";
 
-export default async function TrainingPage() {
+export default async function TrainingPage({ searchParams }: {
+  searchParams: Promise<{ lesson?: string }>;
+}) {
   const u = await requireUser();
   const uid = u.id;
+  const { lesson: openLessonId } = await searchParams; // ?lesson=<id> → เปิดโจทย์นั้นเลย
 
   const courses = await prisma.course.findMany({
     orderBy: { order: "asc" },
@@ -40,5 +43,5 @@ export default async function TrainingPage() {
     }))
   }));
 
-  return <TrainingView initCourses={data} meId={uid} meRole={u.role} meName={u.name ?? ""} meImage={u.image ?? null} />;
+  return <TrainingView initCourses={data} meId={uid} meRole={u.role} meName={u.name ?? ""} meImage={u.image ?? null} openLessonId={openLessonId ?? null} />;
 }

@@ -185,7 +185,7 @@ async function compressImage(file: File): Promise<Blob> {
   });
 }
 
-export default function Dashboard({ user, initialReports, myStats, pendingQuizzes = 0 }: { user: User; initialReports: ReportEx[]; myStats: MyStats; pendingQuizzes?: number }) {
+export default function Dashboard({ user, initialReports, myStats, pendingQuizzes = 0, nextQuizId = null }: { user: User; initialReports: ReportEx[]; myStats: MyStats; pendingQuizzes?: number; nextQuizId?: string | null }) {
   const [reports, setReports] = useState<ReportEx[]>(initialReports);
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
@@ -326,7 +326,7 @@ export default function Dashboard({ user, initialReports, myStats, pendingQuizze
 
         {/* Field quiz CTA — โผล่เมื่อมีโจทย์ค้างเท่านั้น */}
         {pendingQuizzes > 0 && (
-          <Link href="/training"
+          <Link href={nextQuizId ? `/training?lesson=${nextQuizId}` : "/training"}
             className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 shadow-sm transition-transform hover:scale-[1.01]"
             style={{ background: "linear-gradient(135deg,#003E8E,#0052b4)" }}>
             <span className="text-2xl flex-shrink-0">📍</span>
