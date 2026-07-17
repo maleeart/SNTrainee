@@ -11,7 +11,13 @@ type LessonData = {
   id: string; title: string; order: number;
   videoUrl: string | null; fileUrl: string | null; fileName: string | null;
   completed: boolean;
-  quiz: { id: string; passScore: number; questions: QuizQ[]; bestScore: number | null; passed: boolean } | null;
+  quiz: {
+    id: string; passScore: number; questions: QuizQ[];
+    bestScore: number | null;
+    firstScore?: number | null; // คะแนนครั้งแรก = คะแนนที่เอาไปคิดโบนัสจริง
+    attemptCount?: number;
+    passed: boolean;
+  } | null;
 };
 
 type CourseData = {
@@ -253,8 +259,9 @@ function QuizBuilderModal({ lesson, titleEditable, onClose, onSave }: {
 
 // ── Lesson modal (viewer) ─────────────────────────────────────────────────────
 
-function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
+function LessonModal({ lesson, courseId, isFieldQuiz, onClose, onComplete, onQuizDone }: {
   lesson: LessonData; courseId: string;
+  isFieldQuiz?: boolean; // โจทย์หน้างาน — ครั้งแรกคือคะแนนที่นับ ต้องบอกเด็กให้ชัด
   onClose: () => void;
   onComplete: (lessonId: string) => void;
   onQuizDone: (updated: LessonData) => void;
@@ -265,6 +272,8 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
   const [quizResult, setQuizResult] = useState<{ score: number; passed: boolean; correct: number; total: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [marking, setMarking] = useState(false);
+  // คะแนนที่นับ ณ ตอนเปิดโมดัล — จับไว้ก่อนกดส่ง ไม่งั้นค่าจะเปลี่ยนหลังส่งแล้วโชว์ผิด
+  const [countedScore] = useState<number | null>(lesson.quiz?.firstScore ?? null);
 
   const submitQuiz = async () => {
     if (!lesson.quiz || answers.some(a => a === null)) return;
@@ -273,15 +282,24 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
       const res = await fetch(`/api/training/quiz/${lesson.quiz.id}/attempt`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers })
       });
-      if (!res.ok) { alert(`ส่งคำตอบไม่สำเร็จ (${res.status})`); return; }
+      if (!res.ok) {
+        const msg = (await res.json().catch(() => null))?.error;
+        alert(msg ? `ส่งคำตอบไม่สำเร็จ: ${msg}` : `ส่งคำตอบไม่สำเร็จ (${res.status})`);
+        return;
+      }
       const data = await res.json();
       setQuizResult(data);
-      if (data.passed) {
-        onQuizDone({ ...lesson, completed: true, quiz: { ...lesson.quiz!, bestScore: data.score, passed: true } });
-      } else if (lesson.quiz!.bestScore === null || data.score > lesson.quiz!.bestScore) {
-        onQuizDone({ ...lesson, quiz: { ...lesson.quiz!, bestScore: data.score } });
-      }
-    } catch (e) {
+      // ครั้งแรกเท่านั้นที่ตั้ง firstScore — ครั้งถัดไปคงค่าเดิมไว้
+      const q = lesson.quiz!;
+      const nextQuiz = {
+        ...q,
+        firstScore: q.firstScore ?? data.score,
+        attemptCount: (q.attemptCount ?? 0) + 1,
+        bestScore: q.bestScore == null || data.score > q.bestScore ? data.score : q.bestScore,
+        passed: q.passed || data.passed,
+      };
+      onQuizDone({ ...lesson, completed: lesson.completed || data.passed, quiz: nextQuiz });
+    } catch {
       alert("เกิดข้อผิดพลาด กรุณาลองใหม่");
     } finally {
       setSubmitting(false);
@@ -354,6 +372,23 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
                   {lesson.quiz.bestScore != null && ` · คะแนนดีสุด ${lesson.quiz.bestScore}%`}
                 </p>
 
+                {/* โจทย์หน้างาน: บอกให้ชัดว่าครั้งแรกคือครั้งที่นับ — ก่อนกดส่ง ไม่ใช่หลัง */}
+                {isFieldQuiz && !quizResult && (
+                  <div className="rounded-xl px-4 py-3 mb-4 border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+                    {lesson.quiz.firstScore == null ? (
+                      <p className="text-xs leading-relaxed" style={{ color: "#92400E" }}>
+                        ⚠️ <span className="font-semibold">ครั้งแรกคือคะแนนที่นับเป็นโบนัส</span> — ตั้งใจทำให้ดีนะ
+                        ทำซ้ำได้ไม่จำกัดเพื่อทบทวน แต่คะแนนจะยึดครั้งแรกเสมอ
+                      </p>
+                    ) : (
+                      <p className="text-xs leading-relaxed" style={{ color: "#92400E" }}>
+                        📌 คะแนนที่นับเป็นโบนัสของคุณคือ <span className="font-bold">{lesson.quiz.firstScore}%</span> (ครั้งแรก) — ล็อกแล้ว
+                        ทำซ้ำได้เพื่อทบทวน แต่ไม่เปลี่ยนคะแนน
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {quizResult ? (
                   <div className={`rounded-2xl p-6 text-center border ${quizResult.passed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
                     <div className="text-5xl font-bold mb-1" style={{ color: quizResult.passed ? "#10B981" : "#EF4444" }}>
@@ -363,6 +398,18 @@ function LessonModal({ lesson, courseId, onClose, onComplete, onQuizDone }: {
                       {quizResult.passed ? "🎉 ผ่านแล้ว!" : "❌ ไม่ผ่าน"}
                     </p>
                     <p className="text-sm text-gray-500 mb-4">ตอบถูก {quizResult.correct} จาก {quizResult.total} ข้อ</p>
+
+                    {/* โจทย์หน้างาน: บอกตรงๆ ว่าคะแนนที่นับคืออันไหน กันเข้าใจผิดว่าทำใหม่แล้วโบนัสขึ้น */}
+                    {isFieldQuiz && (
+                      <div className="rounded-xl px-4 py-2.5 mb-4 text-xs" style={{ background: "#FFFBEB", color: "#92400E" }}>
+                        {countedScore == null ? (
+                          <>📌 คะแนนที่นับเป็นโบนัส: <span className="font-bold">{quizResult.score}%</span> (ครั้งแรก) — ล็อกแล้ว ทำซ้ำได้แต่ไม่เปลี่ยนคะแนน</>
+                        ) : (
+                          <>📌 คะแนนที่นับเป็นโบนัสยังเป็น <span className="font-bold">{countedScore}%</span> (ครั้งแรก) — ครั้งนี้ไม่เปลี่ยนโบนัส</>
+                        )}
+                      </div>
+                    )}
+
                     {!quizResult.passed && (
                       <button onClick={() => { setQuizResult(null); setAnswers(new Array(lesson.quiz!.questions.length).fill(null)); }}
                         className="text-sm px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
@@ -731,6 +778,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
         <LessonModal
           lesson={lessonModal.lesson}
           courseId={lessonModal.courseId}
+          isFieldQuiz={courses.find(c => c.id === lessonModal.courseId)?.fieldQuiz ?? false}
           onClose={() => setLessonModal(null)}
           onComplete={lid => markComplete(lid, lessonModal.courseId)}
           onQuizDone={updated => updateLesson(lessonModal.courseId, updated)}
