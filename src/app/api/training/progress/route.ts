@@ -9,10 +9,11 @@ export async function POST(req: NextRequest) {
   const { lessonId } = await req.json();
   if (!lessonId) return NextResponse.json({ error: "lessonId required" }, { status: 400 });
 
-  await prisma.lessonProgress.upsert({
-    where: { userId_lessonId: { userId: uid, lessonId } },
-    create: { userId: uid, lessonId },
-    update: {}
-  });
+  // upsert บน compound unique จะถูกห่อเป็น transaction ซึ่ง Neon HTTP mode ไม่รองรับ
+  await prisma.$executeRaw`
+    INSERT INTO "LessonProgress" ("userId", "lessonId", "completedAt")
+    VALUES (${uid}, ${lessonId}, NOW())
+    ON CONFLICT ("userId", "lessonId") DO NOTHING
+  `;
   return NextResponse.json({ ok: true });
 }
