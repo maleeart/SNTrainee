@@ -67,7 +67,25 @@ export function weightedScore(avg: number | null, n: number, nMax: number): numb
 // มีโจทย์แต่ไม่ทำ → นับ 0 (ได้โบนัสน้อยลง แต่ไม่ต่ำกว่าที่พี่เลี้ยงให้)
 export const QUIZ_BONUS_MAX = 0.5;
 
-// quizAvg = เฉลี่ยคะแนน "ครั้งแรก" 0-100 ของทุกโจทย์ที่ตั้งช่วงเขาฝึกอยู่ (ไม่ทำ = 0)
+export type FieldQuizScore = { createdAt: string; firstScores: Record<string, number> };
+
+// เฉลี่ยคะแนน "ครั้งแรก" 0-100 ของโจทย์ที่ตั้งช่วงที่นักศึกษาคนนี้ฝึกอยู่
+// ⚠️ ตัวหาร = โจทย์ทั้งหมดที่นับ ไม่ใช่จำนวนข้อที่ทำ — ห้ามเปลี่ยนเป็นเฉลี่ยเฉพาะข้อที่ทำ
+//    ไม่งั้นเด็กทำข้อง่ายข้อเดียวได้ 100% แล้วรับโบนัสเต็ม (ทำข้อเดียวจะชนะทำครบ)
+export function quizAvgFor(
+  studentId: string, startDate: string | null | undefined, endDate: string | null | undefined,
+  quizzes: FieldQuizScore[],
+): number | null {
+  const from = startDate?.slice(0, 10);
+  const to = endDate?.slice(0, 10);
+  const mine = quizzes.filter(q => {
+    const d = q.createdAt.slice(0, 10);
+    return (!from || d >= from) && (!to || d <= to);
+  });
+  if (!mine.length) return null; // ไม่มีโจทย์ในช่วงของเขา → ไม่มีโบนัส ไม่กระทบ
+  return mine.reduce((sum, q) => sum + (q.firstScores[studentId] ?? 0), 0) / mine.length;
+}
+
 export function quizBonus(quizAvg: number | null): number {
   if (quizAvg == null) return 0;
   return (Math.min(100, Math.max(0, quizAvg)) / 100) * QUIZ_BONUS_MAX;

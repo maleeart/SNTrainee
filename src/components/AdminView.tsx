@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
-import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, QUIZ_BONUS_MAX } from "@/lib/labels";
+import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, quizAvgFor, QUIZ_BONUS_MAX } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
@@ -41,18 +41,8 @@ function overallAvg(evals: EvalRecord[]): number | null {
   return all.length ? all.reduce((a, b) => a + b, 0) / all.length : null;
 }
 
-// เฉลี่ยคะแนน quiz ครั้งแรก 0-100 ของโจทย์ที่ตั้ง "ช่วงที่นักศึกษาคนนี้ฝึกอยู่" (ไม่ทำ = 0)
-// ไม่มีโจทย์ในช่วงของเขาเลย → null → ไม่มีโบนัส คะแนนเท่าเดิม
-function quizAvgFor(s: U, quizzes: FieldQuiz[]): number | null {
-  const from = s.startDate?.slice(0, 10);
-  const to = s.endDate?.slice(0, 10);
-  const mine = quizzes.filter(q => {
-    const d = q.createdAt.slice(0, 10);
-    return (!from || d >= from) && (!to || d <= to);
-  });
-  if (!mine.length) return null;
-  return mine.reduce((sum, q) => sum + (q.firstScores[s.id] ?? 0), 0) / mine.length;
-}
+// quizAvgFor ย้ายไป labels.ts แล้ว (อยู่กับสูตรคะแนนอื่น + มี assert คุมใน scripts/test-scoring.mjs)
+const quizAvgOf = (s: U, quizzes: FieldQuiz[]) => quizAvgFor(s.id, s.startDate, s.endDate, quizzes);
 
 export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports, quizzes = [] }: {
   readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[]; quizzes?: FieldQuiz[];
@@ -317,7 +307,7 @@ function OverviewTab({ reports, students, quizzes }: { reports: Rep[]; students:
     const mine = reports.filter(r => r.user.id === s.id).sort((a, b) => b.date.localeCompare(a.date));
     const allEvals = mine.flatMap(r => r.evaluations);
     const mentorAvg = overallAvg(allEvals);
-    const quizAvg = quizAvgFor(s, quizzes);
+    const quizAvg = quizAvgOf(s, quizzes);
     const avg = withQuizBonus(mentorAvg, quizAvg); // คะแนนดิบ = พี่เลี้ยง + โบนัส quiz (ตัดที่ 5)
     return {
       student: s, reportCount: mine.length, evalCount: allEvals.length, avg, mentorAvg, quizAvg,
@@ -864,7 +854,7 @@ function ExportTab({ reports, students, quizzes }: { reports: Rep[]; students: U
       if (w != null) criteria[c.key] = w;
     }
     // โบนัส quiz เสริมที่คะแนนรวม ไม่แตะรายหมวดของพี่เลี้ยง
-    const quizAvg = quizAvgFor(s, quizzes);
+    const quizAvg = quizAvgOf(s, quizzes);
     const rawOverall = withQuizBonus(overallAvg(allEvals), quizAvg);
     const overall = weightedScore(rawOverall, mine.length, nMax);
     return { student: s, mine, allEvals, criteria, quizAvg, rawOverall, overall };
