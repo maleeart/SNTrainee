@@ -47,9 +47,18 @@ export default async function DashboardPage() {
   const allNums = allEvalScores.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
   const myOverall = allNums.length ? allNums.reduce((a, b) => a + b, 0) / allNums.length : null;
 
+  // โจทย์หน้างานที่ยังไม่ได้ทำ — โผล่บนหน้าหลักเมื่อมีเท่านั้น
+  const pendingQuizzes = await prisma.courseLesson.count({
+    where: {
+      course: { fieldQuiz: true },
+      quiz: { is: { attempts: { none: { userId: u.id } } } },
+    },
+  });
+
   return <Dashboard
     user={{ ...u, ...me, startDate: me.startDate?.toISOString() ?? null, endDate: me.endDate?.toISOString() ?? null }}
     initialReports={JSON.parse(JSON.stringify(reports))}
     myStats={{ totalReports: reports.length, scoredReports: reports.filter(r => r.status === "SCORED").length, criteria: myCriteria, overall: myOverall }}
+    pendingQuizzes={pendingQuizzes}
   />;
 }

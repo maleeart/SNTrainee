@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import type { Report } from "@prisma/client";
 import { STATUS_LABEL, STATUS_COLOR } from "@/lib/labels";
 import { exportPptx } from "@/lib/exportPptx";
@@ -184,7 +185,7 @@ async function compressImage(file: File): Promise<Blob> {
   });
 }
 
-export default function Dashboard({ user, initialReports, myStats }: { user: User; initialReports: ReportEx[]; myStats: MyStats }) {
+export default function Dashboard({ user, initialReports, myStats, pendingQuizzes = 0 }: { user: User; initialReports: ReportEx[]; myStats: MyStats; pendingQuizzes?: number }) {
   const [reports, setReports] = useState<ReportEx[]>(initialReports);
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
@@ -322,6 +323,22 @@ export default function Dashboard({ user, initialReports, myStats }: { user: Use
             </div>
           ))}
         </div>
+
+        {/* Field quiz CTA — โผล่เมื่อมีโจทย์ค้างเท่านั้น */}
+        {pendingQuizzes > 0 && (
+          <Link href="/training"
+            className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 shadow-sm transition-transform hover:scale-[1.01]"
+            style={{ background: "linear-gradient(135deg,#003E8E,#0052b4)" }}>
+            <span className="text-2xl flex-shrink-0">📍</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold text-sm">โจทย์หน้างานรอทำอยู่ {pendingQuizzes} ข้อ</p>
+              <p className="text-blue-200 text-xs mt-0.5">พี่เลี้ยงตั้งโจทย์จากงานจริงไว้ให้ — กดเพื่อทำเลย</p>
+            </div>
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white flex-shrink-0" style={{ color: "#003E8E" }}>
+              ทำโจทย์ →
+            </span>
+          </Link>
+        )}
 
         {/* Internship progress bar */}
         {(() => {
