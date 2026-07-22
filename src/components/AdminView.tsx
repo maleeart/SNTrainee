@@ -605,11 +605,13 @@ function LogsTab({ reports, meId, readOnly, adminIds, onEval }: { reports: Rep[]
   // unique students from reports
   const studentList = Array.from(new Map(reports.map(r => [r.user.id, r.user])).values());
 
-  // ใช้เกณฑ์เดียวกับการ์ดภาพรวม (แอดมินประเมินหรือยัง) ไม่ใช่ Report.status
-  // ไม่งั้นการ์ดบอก "รอประเมิน 3" แต่กรองในหน้านี้จะได้ 0 เพราะ status ถูกตั้งตั้งแต่คนแรกประเมิน
-  const adminDone = (r: Rep) => r.evaluations.some(e => adminIds.has(e.mentorId));
+  // หน้านี้คือ "งานที่ฉันต้องประเมิน" → เกณฑ์คือ *ฉัน* ประเมินหรือยัง ไม่เทียบกับคนอื่น
+  // ผู้สังเกตการณ์ประเมินไม่ได้ จึงไม่มี "ของฉัน" — ให้ดูมุมองค์กร (แอดมินประเมินหรือยัง) แทน
+  const evaluated = (r: Rep) => readOnly
+    ? r.evaluations.some(e => adminIds.has(e.mentorId))
+    : r.evaluations.some(e => e.mentorId === meId);
   const filtered = reports.filter(r =>
-    (filter === "ALL" || (filter === "SCORED" ? adminDone(r) : !adminDone(r))) &&
+    (filter === "ALL" || (filter === "SCORED" ? evaluated(r) : !evaluated(r))) &&
     (studentFilter === "ALL" || r.user.id === studentFilter)
   );
 
@@ -657,8 +659,10 @@ function LogsTab({ reports, meId, readOnly, adminIds, onEval }: { reports: Rep[]
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${adminDone(r) ? STATUS_COLOR.SCORED : STATUS_COLOR.PENDING}`}>
-                    {adminDone(r) ? STATUS_LABEL.SCORED : STATUS_LABEL.PENDING}
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${evaluated(r) ? STATUS_COLOR.SCORED : STATUS_COLOR.PENDING}`}>
+                    {readOnly
+                      ? (evaluated(r) ? STATUS_LABEL.SCORED : STATUS_LABEL.PENDING)
+                      : (evaluated(r) ? "คุณประเมินแล้ว" : "รอคุณประเมิน")}
                   </span>
                   {!readOnly && (
                     <button onClick={() => onEval(r)}

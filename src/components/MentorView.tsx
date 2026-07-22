@@ -3,7 +3,7 @@
 import { useState } from "react";
 import AppNav from "./AppNav";
 import SpinWheel from "./SpinWheel";
-import { STATUS_LABEL, STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA } from "@/lib/labels";
+import { STATUS_COLOR, LEVEL_LABEL, SCORE_CRITERIA } from "@/lib/labels";
 
 type EvalRecord = {
   id: string;
@@ -78,7 +78,9 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
   const pending = byStudent.filter(r => r.evaluations.every(e => e.mentorId !== meId));
   const done = byStudent.filter(r => r.evaluations.some(e => e.mentorId === meId));
   const list = tab === "pending" ? pending : tab === "done" ? done : byStudent;
-  const myPendingCount = pending.filter(r => r.status === "PENDING").length;
+  // "รอฉันประเมิน" = ฉันยังไม่ได้ประเมิน ไม่เกี่ยวกับว่าคนอื่นประเมินไปหรือยัง
+  // (เดิมกรอง status === "PENDING" ทับอีกชั้น ทำให้ตัวเลขหายไปทุกฉบับที่มีพี่เลี้ยงคนอื่นประเมินแล้ว)
+  const myPendingCount = pending.length;
 
   const onEvalDone = (reportId: string, ev: EvalRecord) => {
     setReports(prev => prev.map(r => {
@@ -195,7 +197,10 @@ export default function MentorView({ meId, meName, meNickname, meEmail, meImage,
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                        {/* ป้ายบอกสถานะ "ของฉัน" ให้ตรงกับแท็บ ไม่ใช่ status รวมที่ตั้งตั้งแต่คนแรกประเมิน */}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${myEval ? STATUS_COLOR.SCORED : STATUS_COLOR.PENDING}`}>
+                          {myEval ? "คุณประเมินแล้ว" : "รอคุณประเมิน"}
+                        </span>
                         {r.editReason && (
                           <button onClick={() => setEditReasonPopup(r.editReason)}
                             className="text-xs px-1.5 py-0.5 rounded-full font-medium hover:opacity-80"
