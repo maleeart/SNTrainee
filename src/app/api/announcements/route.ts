@@ -6,6 +6,7 @@ export async function GET(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
 
     const role = session.user.role ?? "STUDENT";
     const userId = session.user.id;
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
     if (!["ADMIN", "EXECUTIVE"].includes(session.user.role ?? "")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

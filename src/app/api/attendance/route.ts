@@ -16,6 +16,7 @@ function requireAdmin(role: string) {
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
   if (!requireAdmin(session.user.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const month = req.nextUrl.searchParams.get("month");
@@ -78,6 +79,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
   if (!requireAdmin(session.user.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { userId, date: dateStr, action } = await req.json();

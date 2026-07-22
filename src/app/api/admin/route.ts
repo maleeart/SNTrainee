@@ -6,9 +6,37 @@ import { prisma } from "@/lib/prisma";
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
   if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const b = await req.json();
+
+  // อนุมัติคำขอสิทธิ์ — ให้ role ตามที่ผู้ใช้ขอไว้ (หรือที่แอดมินเลือกแทน)
+  if (b.op === "approve") {
+    const target = await prisma.user.findUnique({
+      where: { id: b.userId }, select: { requestedRole: true },
+    });
+    if (!target) return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
+    // ห้ามอนุมัติขึ้นเป็น ADMIN ผ่านช่องทางนี้ — ต้องไปตั้งที่ช่องสิทธิ์โดยตรง
+    const granted = b.role ?? target.requestedRole ?? "EXECUTIVE";
+    if (granted === "ADMIN") return NextResponse.json({ error: "อนุมัติเป็นผู้ดูแลระบบผ่านหน้านี้ไม่ได้" }, { status: 400 });
+
+    const user = await prisma.user.update({
+      where: { id: b.userId },
+      data: { role: granted, approved: true, requestedRole: null },
+    });
+    return NextResponse.json({ id: user.id, role: user.role, approved: user.approved });
+  }
+
+  // ปฏิเสธคำขอ — ล้างคำขอทิ้ง ผู้ใช้ยังค้างหน้ารออนุมัติ เลือกสิทธิ์ใหม่ได้
+  if (b.op === "reject") {
+    const user = await prisma.user.update({
+      where: { id: b.userId },
+      data: { approved: false, requestedRole: null },
+    });
+    return NextResponse.json({ id: user.id, approved: user.approved });
+  }
+
   if (b.op === "role") {
     const user = await prisma.user.update({
       where: { id: b.userId },

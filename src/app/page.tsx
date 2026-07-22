@@ -7,7 +7,9 @@ import { Suspense } from "react";
 export default async function Home() {
   const session = await auth();
   if (session?.user) {
-    if (session.user.role === "STUDENT" && !session.user.profileDone) redirect("/profile");
+    if (!session.user.profileDone) redirect("/profile");
+    // กรอกข้อมูลแล้วแต่แอดมินยังไม่อนุมัติ — ค้างที่หน้ารออนุมัติ ห้ามหลุดเข้าหน้าอื่น
+    if (!session.user.approved) redirect("/pending");
     redirect(homeFor(session.user.role));
   }
   return <Suspense><LoginPage /></Suspense>;

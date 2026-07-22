@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 export async function POST() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
 
   await prisma.user.update({
     where: { id: session.user.id },

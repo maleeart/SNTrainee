@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
 
   const { id } = await params;
   const report = await prisma.report.findUnique({ where: { id } });

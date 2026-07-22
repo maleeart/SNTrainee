@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
 
   const { id } = await params;
   const leave = await prisma.leaveRequest.findUnique({ where: { id } });

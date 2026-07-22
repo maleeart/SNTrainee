@@ -15,9 +15,16 @@ const ROLE_OPTIONS: { role: PickedRole; label: string; sub: string; icon: string
   { role: "EXECUTIVE", label: "ผู้สังเกตการณ์", sub: "ดูภาพรวมและโหลดรายงาน ไม่สามารถแก้ไขได้", icon: "👁️" },
 ];
 
-export default function ProfileForm({ user }: { user: User & { nickname?: string | null } }) {
+const OTHER = "__OTHER__";
+
+export default function ProfileForm({ user, schools = [] }: { user: User & { nickname?: string | null }; schools?: string[] }) {
   const router = useRouter();
   const isAdmin = user.role === "ADMIN";
+
+  // สถานศึกษาเดิมไม่อยู่ในรายการ = เคยกรอกเอง → เปิดช่องกรอกค้างไว้ให้เลย
+  const [schoolPick, setSchoolPick] = useState(
+    user.school && !schools.includes(user.school) ? OTHER : (user.school ?? "")
+  );
 
   // skip step 1 if already admin (role locked) or already profileDone (editing)
   const [step, setStep] = useState<1 | 2>(isAdmin || user.profileDone ? 2 : 1);
@@ -40,6 +47,7 @@ export default function ProfileForm({ user }: { user: User & { nickname?: string
   const save = async () => {
     setErr("");
     if (!form.name.trim()) return setErr("กรุณากรอกชื่อ-นามสกุล");
+    if (pickedRole === "STUDENT" && !form.school.trim()) return setErr("กรุณาเลือกหรือกรอกสถานศึกษา");
     setSaving(true);
     const res = await fetch("/api/profile", {
       method: "POST",
@@ -48,10 +56,10 @@ export default function ProfileForm({ user }: { user: User & { nickname?: string
     });
     setSaving(false);
     if (!res.ok) return setErr((await res.json()).error ?? "เกิดข้อผิดพลาด");
-    const { role } = await res.json();
-    // redirect ตาม role
-    const dest = role === "STUDENT" ? "/dashboard" : role === "MENTOR" ? "/mentor" : "/admin";
-    router.push(dest);
+    const { approved, role } = await res.json();
+    // ยังไม่อนุมัติ → ไปหน้ารออนุมัติ ไม่ใช่หน้าตาม role ที่ขอไว้
+    if (!approved) { router.push("/pending"); router.refresh(); return; }
+    router.push(role === "STUDENT" ? "/dashboard" : role === "MENTOR" ? "/mentor" : "/admin");
     router.refresh();
   };
 
@@ -144,8 +152,26 @@ export default function ProfileForm({ user }: { user: User & { nickname?: string
                 </select>
               </F>
               <F label="สถานศึกษา *">
-                <input className="input" value={form.school} onChange={e => setForm({ ...form, school: e.target.value })} placeholder="เช่น วิทยาลัยเทคนิคนนทบุรี" />
+                <select className="input" value={schoolPick}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setSchoolPick(v);
+                    // เลือก "อื่นๆ" → ล้างช่องให้พิมพ์เอง, เลือกจากรายการ → ใช้ค่านั้นเลย
+                    setForm({ ...form, school: v === OTHER ? "" : v });
+                  }}>
+                  <option value="" disabled>— เลือกสถานศึกษา —</option>
+                  {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value={OTHER}>อื่นๆ (กรอกเอง)</option>
+                </select>
               </F>
+              {schoolPick === OTHER && (
+                <F label="ระบุสถานศึกษา *">
+                  <input className="input" autoFocus value={form.school}
+                    onChange={e => setForm({ ...form, school: e.target.value })}
+                    placeholder="พิมพ์ชื่อสถานศึกษา" />
+                  <p className="text-xs text-gray-400 mt-1">ชื่อที่กรอกจะถูกเพิ่มในรายการให้คนถัดไปเลือกได้</p>
+                </F>
+              )}
               <F label="อาจารย์นิเทศ">
                 <input className="input" value={form.advisor} onChange={e => setForm({ ...form, advisor: e.target.value })} placeholder="ชื่ออาจารย์ที่ดูแล" />
               </F>

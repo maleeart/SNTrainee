@@ -14,16 +14,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "กรุณากรอกระดับชั้นและสถานศึกษา" }, { status: 400 });
   }
 
-  // ไม่อนุญาตให้เปลี่ยนเป็น ADMIN ผ่าน API นี้
+  // ⚠️ role ที่ผู้ใช้เลือกเป็นแค่ "คำขอ" — ห้ามเขียนลง user.role เด็ดขาด
+  // ไม่งั้นใครก็ตั้งสิทธิ์ตัวเองเป็นผู้สังเกตการณ์แล้วเห็นข้อมูลเด็กทุกคนได้ทันที
   const allowedRoles = ["STUDENT", "MENTOR", "EXECUTIVE"];
-  const safeRole = allowedRoles.includes(role) ? role : undefined;
+  const wanted = allowedRoles.includes(role) ? role : undefined;
+  const isAdmin = session.user.role === "ADMIN";
 
   await prisma.user.update({
     where: { id: session.user.id },
     data: {
       name: name.trim(),
       nickname: nickname?.trim() || null,
-      ...(safeRole && session.user.role !== "ADMIN" ? { role: safeRole } : {}),
+      // แอดมินแก้โปรไฟล์ตัวเองไม่ต้องขออนุมัติ ส่วนคนอื่นบันทึกเป็นคำขอไว้รอแอดมินกด
+      ...(isAdmin ? {} : { requestedRole: wanted }),
       level: isStudent ? level : null,
       school: isStudent ? school.trim() : null,
       advisor: isStudent ? (advisor?.trim() || null) : null,
@@ -32,5 +35,7 @@ export async function POST(req: NextRequest) {
       profileDone: true,
     },
   });
-  return NextResponse.json({ ok: true, role: safeRole ?? session.user.role });
+
+  // ยังไม่อนุมัติ → ให้ frontend พาไปหน้ารออนุมัติ ไม่ใช่หน้าตาม role ที่ขอ
+  return NextResponse.json({ ok: true, approved: session.user.approved, role: session.user.role });
 }

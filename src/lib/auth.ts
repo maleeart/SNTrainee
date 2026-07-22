@@ -17,11 +17,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, user }) {
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { role: true, profileDone: true },
+        select: { role: true, profileDone: true, approved: true },
       });
       session.user.id = user.id;
       session.user.role = dbUser?.role ?? "STUDENT";
       session.user.profileDone = dbUser?.profileDone ?? false;
+      // ผู้ใช้ใหม่ = false จนกว่าแอดมินจะอนุมัติ — guards ใช้ค่านี้กันเข้าทุกหน้า
+      session.user.approved = dbUser?.approved ?? false;
       return session;
     },
   },
@@ -29,7 +31,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // Promote the fixed admin email on first sign-in
     async signIn({ user }) {
       if (user.email === ADMIN_EMAIL && user.id) {
-        await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
+        await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN", approved: true } });
       }
     },
   },

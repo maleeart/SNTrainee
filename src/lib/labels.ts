@@ -5,6 +5,20 @@ export const ROLE_LABEL: Record<string, string> = {
   EXECUTIVE: "ผู้สังเกตการณ์",
 };
 
+// สถานศึกษาตั้งต้น — รายการที่ผู้ใช้กรอกเอง ("อื่นๆ") จะถูกดึงจาก DB มาต่อท้ายอัตโนมัติ
+export const SCHOOL_PRESETS = [
+  "โรงเรียนกองทัพอุปถัมภ์ ช่างกล ขส.ทบ.",
+  "มหาวิทยาลัยเทคโนโลยีราชมงคลพระนคร",
+];
+
+// รวม preset + ที่เคยมีคนกรอกไว้แล้ว ไม่ซ้ำ เรียง preset ขึ้นก่อนเสมอ
+export function schoolOptions(fromDb: (string | null)[]): string[] {
+  const extra = [...new Set(fromDb.filter((s): s is string => !!s?.trim()).map(s => s.trim()))]
+    .filter(s => !SCHOOL_PRESETS.includes(s))
+    .sort((a, b) => a.localeCompare(b, "th"));
+  return [...SCHOOL_PRESETS, ...extra];
+}
+
 export const LEVEL_LABEL: Record<string, string> = {
   PVC: "ปวช.",
   PVS: "ปวส.",

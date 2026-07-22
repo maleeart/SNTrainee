@@ -9,7 +9,7 @@ import AppNav from "./AppNav";
 import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, quizAvgFor, QUIZ_BONUS_MAX, isWeekend } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
-type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
+type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean; approved?: boolean; requestedRole?: string | null };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
   learned: string | null; solution: string | null; result: string | null;
@@ -44,8 +44,8 @@ function overallAvg(evals: EvalRecord[]): number | null {
 // quizAvgFor ย้ายไป labels.ts แล้ว (อยู่กับสูตรคะแนนอื่น + มี assert คุมใน scripts/test-scoring.mjs)
 const quizAvgOf = (s: U, quizzes: FieldQuiz[]) => quizAvgFor(s.id, s.startDate, s.endDate, quizzes);
 
-export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports, quizzes = [] }: {
-  readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[]; quizzes?: FieldQuiz[];
+export default function AdminView({ readOnly, meId, meName, meNickname, meEmail, meImage, users: initUsers, reports: initReports, quizzes = [], schools = [] }: {
+  readOnly: boolean; meId: string; meName: string; meNickname?: string | null; meEmail?: string | null; meImage?: string | null; users: U[]; reports: Rep[]; quizzes?: FieldQuiz[]; schools?: string[];
 }) {
   const router = useRouter();
   const [users, setUsers] = useState<U[]>(initUsers);
@@ -83,6 +83,21 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "role", userId, role }) });
     if (res.ok) setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role } : u)));
     else alert("เปลี่ยนสิทธิ์ไม่สำเร็จ");
+  };
+
+  // อนุมัติ/ปฏิเสธคำขอสิทธิ์ — อนุมัติแล้วผู้ใช้เข้าระบบได้ทันทีตาม role ที่ขอ
+  const approveUser = async (userId: string, role?: string) => {
+    const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "approve", userId, role }) });
+    if (!res.ok) return alert((await res.json().catch(() => ({}))).error ?? "อนุมัติไม่สำเร็จ");
+    const u = await res.json();
+    setUsers(prev => prev.map(x => (x.id === userId ? { ...x, ...u, requestedRole: null } : x)));
+  };
+
+  const rejectUser = async (userId: string) => {
+    if (!confirm("ปฏิเสธคำขอนี้?\nผู้ใช้จะยังอยู่หน้ารออนุมัติ และเลือกสิทธิ์ใหม่ได้")) return;
+    const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "reject", userId }) });
+    if (!res.ok) return alert("ปฏิเสธไม่สำเร็จ");
+    setUsers(prev => prev.map(x => (x.id === userId ? { ...x, approved: false, requestedRole: null } : x)));
   };
 
   const editUser = async (userId: string, data: Partial<U>): Promise<boolean> => {
@@ -245,13 +260,13 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
             {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
-            {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} />}
+            {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} onApprove={approveUser} onReject={rejectUser} />}
             {tab === "announce"   && <AnnounceTab readOnly={readOnly} />}
             {tab === "attendance" && <AttendanceTab />}
           </div>
         </main>
       </div>
-      {detailUser && <UserDetailModal user={detailUser} reports={reports} readOnly={readOnly} meId={meId}
+      {detailUser && <UserDetailModal user={detailUser} reports={reports} readOnly={readOnly} meId={meId} schools={schools}
         onEdit={editUser} onDelete={deleteUser} onClose={() => setDetailUser(null)} />}
       {evalTarget && (
         <EvalModal
@@ -1160,13 +1175,70 @@ const ROLE_ORDER = ["ADMIN", "MENTOR", "STUDENT", "EXECUTIVE"] as const;
 const ROLE_SECTION_LABEL: Record<string, string> = { ADMIN: "ผู้ดูแลระบบ", MENTOR: "พี่เลี้ยง", STUDENT: "นักศึกษาฝึกงาน", EXECUTIVE: "ผู้สังเกตการณ์" };
 const ROLE_SECTION_COLOR: Record<string, string> = { ADMIN: "#7C3AED", MENTOR: "#003E8E", STUDENT: "#059669", EXECUTIVE: "#B45309" };
 
-function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void }) {
-  const grouped = ROLE_ORDER.map(role => ({ role, list: users.filter(u => u.role === role) })).filter(g => g.list.length > 0);
+function UsersTab({ users, readOnly, onSetRole, onDetail, onApprove, onReject }: {
+  users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void;
+  onApprove: (id: string, role?: string) => void; onReject: (id: string) => void;
+}) {
+  // รออนุมัติ = กรอกข้อมูลครบแล้วแต่ยังไม่ได้รับสิทธิ์ — ต้องอยู่บนสุดเสมอ
+  const waiting = users.filter(u => u.approved === false && u.profileDone);
+  const grouped = ROLE_ORDER.map(role => ({ role, list: users.filter(u => u.role === role && u.approved !== false) })).filter(g => g.list.length > 0);
 
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: "#003E8E" }}>ผู้ใช้งาน</h1>
-      <p className="text-sm text-gray-500 mb-6">คลิกชื่อเพื่อดูรายละเอียด</p>
+      <p className="text-sm text-gray-500 mb-6">คลิกชื่อเพื่อดูรายละเอียดและแก้ไขข้อมูล</p>
+
+      {/* ── รออนุมัติสิทธิ์ — บนสุด โผล่เฉพาะเมื่อมีคำขอค้าง ── */}
+      {waiting.length > 0 && (
+        <div className="mb-6 rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: "#FCD34D", background: "#FFFBEB" }}>
+          <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: "#FDE68A" }}>
+            <span className="text-lg">⏳</span>
+            <span className="text-sm font-bold" style={{ color: "#92400E" }}>รออนุมัติสิทธิ์</span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "#D97706" }}>{waiting.length}</span>
+          </div>
+          <div className="divide-y" style={{ borderColor: "#FDE68A" }}>
+            {waiting.map(u => (
+              <div key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onClick={() => onDetail(u)}>
+                  {u.image
+                    ? <img src={u.image} className="w-8 h-8 rounded-full flex-shrink-0" alt="" />
+                    : <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs text-gray-500 flex-shrink-0">{u.name?.[0]}</div>}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate hover:underline">{u.name ?? "—"}</p>
+                    <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-gray-500">ขอสิทธิ์</span>
+                  {readOnly ? (
+                    <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-white border border-amber-200" style={{ color: "#92400E" }}>
+                      {u.requestedRole ? ROLE_LABEL[u.requestedRole] : "—"}
+                    </span>
+                  ) : (
+                    <>
+                      {/* แอดมินเปลี่ยนสิทธิ์ที่จะให้ได้ ไม่ต้องอนุมัติตามที่ขอเป๊ะๆ */}
+                      <select defaultValue={u.requestedRole ?? "EXECUTIVE"} id={`req-${u.id}`}
+                        className="border border-amber-200 rounded-lg px-2 py-1 text-xs bg-white">
+                        {["STUDENT", "MENTOR", "EXECUTIVE"].map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      </select>
+                      <button onClick={() => {
+                        const sel = document.getElementById(`req-${u.id}`) as HTMLSelectElement | null;
+                        onApprove(u.id, sel?.value);
+                      }} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: "#16A34A" }}>
+                        อนุมัติ
+                      </button>
+                      <button onClick={() => onReject(u.id)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50">
+                        ปฏิเสธ
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         {grouped.map(({ role, list }) => (
@@ -1180,7 +1252,7 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead style={{ background: "#F4F6FB" }}>
-                  <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th></tr>
+                  <tr><Th>ชื่อ</Th><Th>ชื่อเล่น</Th><Th>อีเมล</Th><Th>ระดับ</Th><Th>สถานศึกษา</Th><Th>สิทธิ์</Th><Th>{readOnly ? "" : "แก้ไข"}</Th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {list.map(u => (
@@ -1204,6 +1276,14 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
                             </select>
                           )}
                       </td>
+                      <td className="px-4 py-3">
+                        {!readOnly && (
+                          <button onClick={e => { e.stopPropagation(); onDetail(u); }}
+                            className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 whitespace-nowrap">
+                            ✏️ แก้ไข
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1218,8 +1298,8 @@ function UsersTab({ users, readOnly, onSetRole, onDetail }: { users: U[]; readOn
 
 // ─── User Detail Modal ────────────────────────────────────────────────────────
 
-function UserDetailModal({ user: u, reports, readOnly, meId, onEdit, onDelete, onClose }: {
-  user: U; reports: Rep[]; readOnly: boolean; meId: string;
+function UserDetailModal({ user: u, reports, readOnly, meId, schools = [], onEdit, onDelete, onClose }: {
+  user: U; reports: Rep[]; readOnly: boolean; meId: string; schools?: string[];
   onEdit: (userId: string, data: Partial<U>) => Promise<boolean>;
   onDelete: (userId: string) => Promise<boolean>;
   onClose: () => void;
@@ -1238,6 +1318,11 @@ function UserDetailModal({ user: u, reports, readOnly, meId, onEdit, onDelete, o
   });
   const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }));
   const isStudent = form.role === "STUDENT";
+
+  // สถานศึกษาเดิมไม่อยู่ในรายการ = เคยกรอกเอง → เปิดช่องกรอกค้างไว้
+  const [schoolPick, setSchoolPick] = useState(
+    u.school && !schools.includes(u.school) ? "__OTHER__" : (u.school ?? "")
+  );
 
   const save = async () => {
     if (!form.name.trim()) return alert("กรุณากรอกชื่อ");
@@ -1300,7 +1385,20 @@ function UserDetailModal({ user: u, reports, readOnly, meId, onEdit, onDelete, o
                     </select>
                   </Field>
                   <Field label="สถานศึกษา">
-                    <input value={form.school} onChange={e => set({ school: e.target.value })} className="ipt" />
+                    <select value={schoolPick} className="ipt"
+                      onChange={e => {
+                        const v = e.target.value;
+                        setSchoolPick(v);
+                        set({ school: v === "__OTHER__" ? "" : v });
+                      }}>
+                      <option value="" disabled>— เลือกสถานศึกษา —</option>
+                      {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value="__OTHER__">อื่นๆ (กรอกเอง)</option>
+                    </select>
+                    {schoolPick === "__OTHER__" && (
+                      <input autoFocus value={form.school} onChange={e => set({ school: e.target.value })}
+                        className="ipt mt-1.5" placeholder="พิมพ์ชื่อสถานศึกษา" />
+                    )}
                   </Field>
                 </div>
                 <Field label="อาจารย์นิเทศ">

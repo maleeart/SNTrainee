@@ -20,10 +20,13 @@ export function homeFor(role: Role): string {
   }
 }
 
-/** Require a logged-in session; optionally restrict to given roles. */
-export async function requireUser(roles?: Role[]) {
+/** Require a logged-in session; optionally restrict to given roles.
+ *  ผู้ใช้ที่ยังไม่ถูกอนุมัติเข้าไม่ได้ทุกหน้า — เด้งไป /pending
+ *  (ยกเว้น /profile กับ /pending เอง ที่เรียก requireUser({ allowUnapproved: true })) */
+export async function requireUser(roles?: Role[], opts?: { allowUnapproved?: boolean }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
+  if (!session.user.approved && !opts?.allowUnapproved) redirect("/pending");
   if (roles && !roles.includes(session.user.role)) redirect(homeFor(session.user.role));
   return session.user;
 }

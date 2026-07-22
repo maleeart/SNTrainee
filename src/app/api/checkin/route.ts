@@ -10,6 +10,7 @@ function thaiToday() {
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
   const userId = session.user.id;
   const today = thaiToday();
 
@@ -33,6 +34,7 @@ export async function POST() {
   try {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
     if (session.user.role !== "STUDENT") return NextResponse.json({ error: `Forbidden: role=${session.user.role}` }, { status: 403 });
 
     const userId = session.user.id;

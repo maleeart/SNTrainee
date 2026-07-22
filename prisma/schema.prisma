@@ -83,6 +83,11 @@ model User {
   // ครั้งล่าสุดที่นักศึกษากดรับทราบผลประเมิน — ใช้คำนวณสด ไม่ต้องมีตาราง Notification
   reportsSeenAt DateTime  @default(now())
 
+  // ขออนุมัติสิทธิ์: ผู้ใช้ใหม่เข้าไม่ได้จนกว่าแอดมินจะกดอนุมัติ
+  // role = สิทธิ์จริงที่ใช้งานได้ · requestedRole = สิทธิ์ที่ขอไว้ ยังไม่มีผลจนกว่าจะอนุมัติ
+  approved      Boolean   @default(false)
+  requestedRole Role?
+
   accounts    Account[]
   sessions    Session[]
   reports     Report[]     @relation("StudentReports")

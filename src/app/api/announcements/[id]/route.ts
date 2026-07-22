@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
 
   const { id } = await params;
   await prisma.$executeRaw`
@@ -21,6 +22,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
   if (!["ADMIN"].includes(session.user.role ?? "")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -3,6 +3,6 @@ import { Role } from "@prisma/client";
 
 declare module "next-auth" {
   interface Session {
-    user: { id: string; role: Role; profileDone: boolean } & DefaultSession["user"];
+    user: { id: string; role: Role; profileDone: boolean; approved: boolean } & DefaultSession["user"];
   }
 }
