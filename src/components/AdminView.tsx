@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
-import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, quizAvgFor, QUIZ_BONUS_MAX } from "@/lib/labels";
+import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, quizAvgFor, QUIZ_BONUS_MAX, isWeekend } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
 type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean };
@@ -1690,9 +1690,12 @@ function IconQuiz()      { return I("M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 
 function IconClock()     { return I("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 5v5l3 3"); }
 
 // ─── Attendance Tab ───────────────────────────────────────────────────────────
+type AttStatus = "มา" | "ลา" | "ขาด" | "หยุด";
+
 type AttendanceStudent = {
   id: string; name: string | null; nickname: string | null;
-  checkedIn: boolean; checkInTime: string | null; onLeave: boolean; status: "มา" | "ลา" | "ขาด";
+  checkedIn: boolean; checkInTime: string | null; onLeave: boolean; status: AttStatus;
+  // "หยุด" = เสาร์-อาทิตย์ที่ไม่มีใครลงเวลา — ไม่นับรวมกับ "ขาด"
 };
 type AttendanceLeave = {
   id: string; userId: string; startDate: string; endDate: string; reason: string; createdAt: string;
@@ -1706,12 +1709,13 @@ type MonthlyData = { students: { id: string; name: string | null; nickname: stri
 // ค่า status ภายในยังเป็น "ขาด" (ใช้เป็น key/เงื่อนไขทั่วไฟล์) — เปลี่ยนแค่คำที่ผู้ใช้เห็น
 const ABSENT_LABEL = "ไม่ลงเวลา";
 
-function statusLabel(s: "มา" | "ลา" | "ขาด") {
-  return s === "มา" ? "✅ มา" : s === "ลา" ? "📋 ลา" : `❌ ${ABSENT_LABEL}`;
+function statusLabel(s: AttStatus) {
+  return s === "มา" ? "✅ มา" : s === "ลา" ? "📋 ลา" : s === "หยุด" ? "— หยุด" : `❌ ${ABSENT_LABEL}`;
 }
-function statusStyle(s: "มา" | "ลา" | "ขาด") {
+function statusStyle(s: AttStatus) {
   return s === "มา" ? { bg: "#DCFCE7", color: "#16A34A" }
     : s === "ลา" ? { bg: "#FEF3C7", color: "#D97706" }
+    : s === "หยุด" ? { bg: "#F3F4F6", color: "#9CA3AF" }
     : { bg: "#FEE2E2", color: "#DC2626" };
 }
 
@@ -1777,12 +1781,13 @@ function AttendanceTab() {
     return new Date(y, m, 0).getDate();
   }
 
-  function getDayStatus(data: MonthlyData, userId: string, dayStr: string): "มา" | "ลา" | "ขาด" {
+  function getDayStatus(data: MonthlyData, userId: string, dayStr: string): AttStatus {
     const d = new Date(dayStr);
     const onLeave = data.leaves.some(l => l.userId === userId && new Date(l.startDate) <= d && d <= new Date(l.endDate));
     if (onLeave) return "ลา";
     const checkedIn = data.checkIns.some(c => c.userId === userId && c.date.slice(0, 10) === dayStr);
-    return checkedIn ? "มา" : "ขาด";
+    if (checkedIn) return "มา"; // ลงเวลาวันหยุดก็ยังนับว่ามา
+    return isWeekend(dayStr) ? "หยุด" : "ขาด";
   }
 
   const exportMonthly = () => {
@@ -1798,8 +1803,8 @@ function AttendanceTab() {
       const dayCells = dayNums.map(d => {
         const dayStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
         const st = getDayStatus(monthlyData, s.id, dayStr);
-        counts[st]++;
-        return st === "มา" ? "✓" : st === "ลา" ? "ลา" : "×";
+        if (st !== "หยุด") counts[st]++; // วันหยุดไม่เข้าช่องนับใดๆ
+        return st === "มา" ? "✓" : st === "ลา" ? "ลา" : st === "หยุด" ? "" : "×";
       });
       return [s.name ?? "", s.nickname ?? "", ...dayCells, counts.มา, counts.ลา, counts.ขาด];
     });
@@ -1849,6 +1854,7 @@ function AttendanceTab() {
                   <span style={{ color: "#16A34A" }}>มา {dailyData.students.filter(s => s.status === "มา").length}</span>
                   <span style={{ color: "#D97706" }}>ลา {dailyData.students.filter(s => s.status === "ลา").length}</span>
                   <span style={{ color: "#DC2626" }}>{ABSENT_LABEL} {dailyData.students.filter(s => s.status === "ขาด").length}</span>
+                  {dailyData.students.some(s => s.status === "หยุด") && <span className="text-gray-400">วันหยุด</span>}
                 </div>
               )}
             </div>
@@ -1859,7 +1865,7 @@ function AttendanceTab() {
             ) : (
               <div className="divide-y divide-gray-50">
                 {dailyData.students.map(s => {
-                  const st = statusStyle(s.status as "มา" | "ลา" | "ขาด");
+                  const st = statusStyle(s.status as AttStatus);
                   const isEditing = editing === s.id;
                   return (
                     <div key={s.id} className="flex items-center gap-2 px-3 sm:px-5 py-3">
@@ -1877,8 +1883,8 @@ function AttendanceTab() {
                               <>
                                 <button disabled={saving} onClick={() => changeStatus(s.id, s.status)}
                                   className="text-xs px-2 py-1 rounded-lg font-semibold border transition-colors disabled:opacity-40"
-                                  style={s.status === "ขาด" ? { background: "#DCFCE7", color: "#16A34A", borderColor: "#16A34A" } : { background: "#FEE2E2", color: "#DC2626", borderColor: "#DC2626" }}>
-                                  {saving ? "..." : s.status === "ขาด" ? "บันทึกมา" : "ลบการมา"}
+                                  style={s.status !== "มา" ? { background: "#DCFCE7", color: "#16A34A", borderColor: "#16A34A" } : { background: "#FEE2E2", color: "#DC2626", borderColor: "#DC2626" }}>
+                                  {saving ? "..." : s.status !== "มา" ? "บันทึกมา" : "ลบการมา"}
                                 </button>
                                 <button onClick={() => setEditing(null)} className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-400">✕</button>
                               </>
@@ -1887,7 +1893,7 @@ function AttendanceTab() {
                         ) : (
                           <div className="flex items-center gap-1">
                             <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: st.bg, color: st.color }}>
-                              {statusLabel(s.status as "มา" | "ลา" | "ขาด")}
+                              {statusLabel(s.status as AttStatus)}
                             </span>
                             {s.status !== "ลา" && (
                               <button onClick={() => setEditing(s.id)} className="text-xs text-gray-400 hover:text-gray-600 p-1">✏️</button>
@@ -1997,7 +2003,7 @@ function AttendanceTab() {
                         const cells = dayNums.map(d => {
                           const dayStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                           const st = getDayStatus(monthlyData, s.id, dayStr);
-                          counts[st]++;
+                          if (st !== "หยุด") counts[st]++; // วันหยุดไม่เข้าช่องนับใดๆ
                           return { dayStr, st };
                         });
                         return (
@@ -2007,10 +2013,10 @@ function AttendanceTab() {
                               {s.name && s.nickname && <div className="text-[10px] text-gray-400 truncate">{s.name}</div>}
                             </td>
                             {cells.map(({ dayStr, st }) => {
-                              const c = st === "มา" ? "#16A34A" : st === "ลา" ? "#D97706" : "#E5E7EB";
-                              const txt = st === "มา" ? "✓" : st === "ลา" ? "ล" : "×";
+                              const c = st === "มา" ? "#16A34A" : st === "ลา" ? "#D97706" : st === "หยุด" ? "#D1D5DB" : "#E5E7EB";
+                              const txt = st === "มา" ? "✓" : st === "ลา" ? "ล" : st === "หยุด" ? "·" : "×";
                               return (
-                                <td key={dayStr} className="text-center py-2 px-0.5">
+                                <td key={dayStr} className={`text-center py-2 px-0.5 ${st === "หยุด" ? "bg-gray-50" : ""}`}>
                                   <span className="text-[11px] font-bold" style={{ color: c }}>{txt}</span>
                                 </td>
                               );

@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { isWeekend } from "@/lib/labels";
 
 function thaiToday() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -64,7 +65,8 @@ export async function GET(req: NextRequest) {
     return {
       id: s.id, name: s.name, nickname: s.nickname, startDate: s.startDate, endDate: s.endDate,
       checkedIn: !!ci, checkInTime: ci?.createdAt ?? null, onLeave,
-      status: onLeave ? "ลา" : ci ? "มา" : "ขาด",
+      // ลงเวลาวันหยุดยังนับ "มา" — เสาร์-อาทิตย์ที่ไม่ได้ลงเวลาถึงเป็น "หยุด" ไม่ใช่ความผิดเด็ก
+      status: onLeave ? "ลา" : ci ? "มา" : isWeekend(dateStr) ? "หยุด" : "ขาด",
     };
   });
 

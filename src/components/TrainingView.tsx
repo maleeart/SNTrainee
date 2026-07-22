@@ -9,6 +9,7 @@ type QuizQ = { q: string; options: string[]; answer?: number };
 
 type LessonData = {
   id: string; title: string; order: number;
+  createdById?: string | null; // ใครตั้ง — พี่เลี้ยงลบได้เฉพาะโจทย์หน้างานของตัวเอง
   videoUrl: string | null; fileUrl: string | null; fileName: string | null;
   completed: boolean;
   quiz: {
@@ -473,8 +474,9 @@ function LessonModal({ lesson, courseId, isFieldQuiz, onClose, onComplete, onQui
 
 // ── Lesson row ────────────────────────────────────────────────────────────────
 
-function LessonRow({ lesson, index, isAdmin, onOpen, onEdit, onQuiz, onDelete }: {
+function LessonRow({ lesson, index, isAdmin, canDelete, onOpen, onEdit, onQuiz, onDelete }: {
   lesson: LessonData; index: number; isAdmin: boolean;
+  canDelete?: boolean; // พี่เลี้ยง: ลบได้เฉพาะโจทย์หน้างานที่ตัวเองตั้ง (แก้/ใส่ข้อสอบ ยังเป็นของแอดมิน)
   onOpen: () => void; onEdit: () => void; onQuiz: () => void; onDelete: () => void;
 }) {
   return (
@@ -496,12 +498,16 @@ function LessonRow({ lesson, index, isAdmin, onOpen, onEdit, onQuiz, onDelete }:
           {!lesson.videoUrl && !lesson.fileUrl && !lesson.quiz && <span className="text-xs text-gray-300">ยังไม่มีเนื้อหา</span>}
         </div>
       </div>
-      {isAdmin && (
+      {(isAdmin || canDelete) && (
         <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-          <button onClick={onEdit} className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">แก้ไข</button>
-          <button onClick={onQuiz} className="text-xs px-2 py-1 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50">
-            {lesson.quiz ? "ข้อสอบ" : "+ข้อสอบ"}
-          </button>
+          {isAdmin && (
+            <>
+              <button onClick={onEdit} className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">แก้ไข</button>
+              <button onClick={onQuiz} className="text-xs px-2 py-1 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50">
+                {lesson.quiz ? "ข้อสอบ" : "+ข้อสอบ"}
+              </button>
+            </>
+          )}
           <button onClick={onDelete} className="text-xs px-2 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">ลบ</button>
         </div>
       )}
@@ -836,6 +842,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
                   <div className="divide-y divide-gray-50">
                     {selected.lessons.map((l, i) => (
                       <LessonRow key={l.id} lesson={l} index={i + 1} isAdmin={isAdmin}
+                        canDelete={meRole === "MENTOR" && !!selected.fieldQuiz && l.createdById === meId}
                         onOpen={() => setLessonModal({ lesson: l, courseId: selected.id })}
                         onEdit={() => setAdminModal({ type: "editLesson", lesson: l, course: selected })}
                         onQuiz={() => setAdminModal({ type: "quiz", lesson: l })}
@@ -849,7 +856,9 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
                   </div>
                 )}
                 {selected.lessons.some(l => l.quiz) && (
-                  <CourseQuizResults courseId={selected.id} meId={meId} isAdmin={isAdminOrExec} grouped={selected.fieldQuiz} />
+                  <CourseQuizResults courseId={selected.id} meId={meId} grouped={selected.fieldQuiz}
+                    // พี่เลี้ยงเห็นผลรวมได้เฉพาะคอร์สโจทย์หน้างาน (API บังคับซ้ำอีกชั้น)
+                    isAdmin={isAdminOrExec || (!!selected.fieldQuiz && meRole === "MENTOR")} />
                 )}
               </div>
             ) : (

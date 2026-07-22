@@ -32,7 +32,7 @@ export default async function TrainingPage({ searchParams }: {
     lessons: c.lessons.map(l => {
       const tries = l.quiz?.attempts ?? [];
       return {
-        id: l.id, title: l.title, order: l.order,
+        id: l.id, title: l.title, order: l.order, createdById: l.createdById,
         videoUrl: l.videoUrl, fileUrl: l.fileUrl, fileName: l.fileName,
         completed: l.progress.length > 0 || tries.some(a => a.passed),
         quiz: l.quiz ? {

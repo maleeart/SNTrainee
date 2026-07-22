@@ -12,9 +12,16 @@ export async function GET(req: NextRequest) {
 
   const courseId = req.nextUrl.searchParams.get("courseId") ?? undefined;
 
+  // พี่เลี้ยงตั้งโจทย์หน้างานเองได้ จึงต้องเห็นผลของ "คอร์สโจทย์หน้างาน" เท่านั้น
+  // คอร์สอบรมปกติยังเห็นแค่ของตัวเองเหมือนเดิม — ไม่ขยายสิทธิ์เกินที่จำเป็น
+  const course = courseId
+    ? await prisma.course.findUnique({ where: { id: courseId }, select: { fieldQuiz: true } })
+    : null;
+  const canSeeAll = isAdmin || (role === "MENTOR" && course?.fieldQuiz === true);
+
   const attempts = await prisma.quizAttempt.findMany({
     where: {
-      ...(isAdmin ? {} : { userId: uid }),
+      ...(canSeeAll ? {} : { userId: uid }),
       ...(courseId ? { quiz: { lesson: { courseId } } } : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -31,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   // โจทย์หน้างาน: ต้องรู้ว่าใคร "ไม่ทำ" ด้วย → แนบรายชื่อนักศึกษาทั้งหมด (เฉพาะแอดมิน)
   // ponytail: รายชื่อนักศึกษาทั้งหมด ไม่กรองตามช่วงฝึก — ถ้าเริ่มมีคนจบไปแล้วรก ค่อยกรองด้วย start/endDate
-  const roster = isAdmin && req.nextUrl.searchParams.get("roster")
+  const roster = canSeeAll && req.nextUrl.searchParams.get("roster")
     ? await prisma.user.findMany({ where: { role: "STUDENT" }, select: { id: true, name: true, nickname: true } })
     : undefined;
 
