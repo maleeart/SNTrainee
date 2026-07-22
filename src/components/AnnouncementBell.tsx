@@ -18,7 +18,7 @@ const TARGET_LABEL: Record<string, string> = {
   STUDENT: "นักศึกษาฝึกงาน",
   MENTOR: "พี่เลี้ยง",
   ADMIN: "ผู้ดูแล",
-  EXECUTIVE: "ผู้บริหาร",
+  EXECUTIVE: "ผู้สังเกตการณ์",
 };
 
 function fmtDate(d: string) {
@@ -51,6 +51,12 @@ export default function AnnouncementBell() {
   const markRead = (id: string) => {
     setItems(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
     fetch(`/api/announcements/${id}`, { method: "POST" });
+  };
+
+  // อ่านทั้งหมด — ทาสีให้อ่านแล้วทันที แล้วค่อยยิง markread=1 (API มาร์คทุกอันที่ผู้ใช้เห็นได้)
+  const markAllRead = async () => {
+    setItems(prev => prev.map(a => ({ ...a, read: true })));
+    await load(true);
   };
 
   const handleBellClick = () => {
@@ -98,6 +104,12 @@ export default function AnnouncementBell() {
                 </span>
               )}
             </div>
+            {unreadCount > 0 && (
+              <button onClick={markAllRead}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors text-white/90 hover:text-white hover:bg-white/15 whitespace-nowrap">
+                ✓ อ่านทั้งหมด
+              </button>
+            )}
           </div>
 
           {/* List */}

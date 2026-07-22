@@ -1621,7 +1621,7 @@ const TARGET_OPTIONS = [
   { value: "STUDENT",   label: "นักศึกษาฝึกงาน" },
   { value: "MENTOR",    label: "พี่เลี้ยง" },
   { value: "ADMIN",     label: "ผู้ดูแล" },
-  { value: "EXECUTIVE", label: "ผู้บริหาร" },
+  { value: "EXECUTIVE", label: "ผู้สังเกตการณ์" },
 ];
 const TARGET_BADGE: Record<string, { bg: string; fg: string }> = {
   ALL:       { bg: "#EEF4FF", fg: "#003E8E" },
