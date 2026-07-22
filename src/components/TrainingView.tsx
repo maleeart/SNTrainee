@@ -542,8 +542,9 @@ function CourseQuizResults({ courseId, meId, isAdmin, grouped }: { courseId: str
   const rows = isAdmin ? results : results.filter(r => r.user.id === meId);
   if (rows.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">ยังไม่มีผลแบบทดสอบ</div>;
 
-  // โจทย์หน้างาน: จัดกลุ่มตามข้อ คลิกดูว่าใครทำ + คะแนน "ครั้งแรก" เท่านั้น (คะแนนที่นับจริง)
-  if (grouped && isAdmin) return <FieldQuizRoster rows={rows} students={students} />;
+  // โจทย์หน้างาน: จัดกลุ่มตามข้อ + คะแนน "ครั้งแรก" เท่านั้น (คะแนนที่นับจริง)
+  // แอดมิน: เห็นทุกคน + ใครยังไม่ทำ · นักศึกษา: rows ถูก filter เหลือของตัวเอง, students ว่าง → เห็นเฉพาะตัวเอง
+  if (grouped) return <FieldQuizRoster rows={rows} students={students} isAdmin={isAdmin} />;
 
   return (
     <div className="border-t border-gray-100 mt-0">
@@ -594,7 +595,7 @@ function CourseQuizResults({ courseId, meId, isAdmin, grouped }: { courseId: str
 }
 
 // โจทย์หน้างาน: กลุ่มตามข้อ → เก็บเฉพาะ "ครั้งแรก" ต่อคน (คะแนนที่นับจริง) → คลิกกางดูรายชื่อ
-function FieldQuizRoster({ rows, students }: { rows: QuizResult[]; students: Student[] }) {
+function FieldQuizRoster({ rows, students, isAdmin }: { rows: QuizResult[]; students: Student[]; isAdmin: boolean }) {
   // rows มาจาก API เรียง createdAt จากใหม่ไปเก่า → ทับค่าไปเรื่อยๆ เหลือ "เก่าสุด" = ครั้งแรก
   const byLesson = new Map<string, { title: string; date: string; firsts: Map<string, QuizResult> }>();
   for (const r of rows) {
@@ -609,7 +610,7 @@ function FieldQuizRoster({ rows, students }: { rows: QuizResult[]; students: Stu
   return (
     <div className="border-t border-gray-100">
       <div className="px-5 py-3 border-b border-gray-50 bg-gray-50/50">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">โจทย์หน้างาน · {groups.length} ข้อ · คะแนนครั้งแรกที่นับจริง</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{isAdmin ? "โจทย์หน้างาน" : "คะแนนของฉัน"} · {groups.length} ข้อ · คะแนนครั้งแรกที่นับจริง</p>
       </div>
       {groups.map(g => {
         const people = [...g.firsts.values()].sort((a, b) => b.score - a.score);
@@ -619,9 +620,14 @@ function FieldQuizRoster({ rows, students }: { rows: QuizResult[]; students: Stu
             <summary className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 list-none">
               <span className="text-gray-300 text-xs group-open:rotate-90 transition-transform">▶</span>
               <span className="text-sm font-medium text-gray-700 flex-1 min-w-0 truncate">📍 {g.title}</span>
-              <span className="text-xs text-gray-400 flex-shrink-0">
-                ทำแล้ว {people.length}{missing.length > 0 && <span className="text-amber-500"> · ค้าง {missing.length}</span>}
-              </span>
+              {isAdmin ? (
+                <span className="text-xs text-gray-400 flex-shrink-0">
+                  ทำแล้ว {people.length}{missing.length > 0 && <span className="text-amber-500"> · ค้าง {missing.length}</span>}
+                </span>
+              ) : (
+                // นักศึกษา: โชว์คะแนนครั้งแรกของตัวเองในหัวข้อเลย ไม่ต้องกาง
+                <span className="text-sm font-bold flex-shrink-0" style={{ color: people[0]?.passed ? "#10B981" : "#EF4444" }}>{people[0]?.score}%</span>
+              )}
             </summary>
             <div className="overflow-x-auto pb-1">
               <table className="w-full text-sm">
