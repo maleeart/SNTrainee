@@ -41,3 +41,13 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+.vercel
+
+# ห้าม commit ค่าลับ (DATABASE_URL / GOOGLE_CLIENT_SECRET / AUTH_SECRET)
+.env*
+# ยกเว้นไฟล์ตัวอย่าง — มีแต่ชื่อตัวแปร ค่าว่าง ไว้บอกคนอื่นว่าต้องตั้งอะไรบ้าง
+!.env.example
+
+# ไฟล์เดียวกับ public/template-report.pptx ที่แอพใช้จริง — ตัวนี้เป็นสำเนาต้นฉบับ ไม่ต้องเข้า repo
+แบบฟอร์มรายงาน.pptx
