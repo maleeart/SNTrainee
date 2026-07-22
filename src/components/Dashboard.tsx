@@ -8,7 +8,7 @@ import { exportPptx } from "@/lib/exportPptx";
 import AppNav from "./AppNav";
 
 type User = { id?: string; name?: string | null; nickname?: string | null; email?: string | null; image?: string | null; role?: string; level?: string | null; school?: string | null; advisor?: string | null; startDate?: string | null; endDate?: string | null };
-type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number; comments: { mentor: string; comment: string }[] } };
+type ReportEx = Report & { images: string[]; editReason: string | null; solution: string | null; result: string | null; evalSummary?: { count: number; comments: { mentor: string; comment: string }[] }; newEval?: boolean };
 type MyStats = { totalReports: number; scoredReports: number; criteria: Record<string, number>; overall: number | null };
 
 const iso = (d: Date | string) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
@@ -185,7 +185,15 @@ async function compressImage(file: File): Promise<Blob> {
   });
 }
 
-export default function Dashboard({ user, initialReports, myStats, pendingQuizzes = 0, nextQuizId = null }: { user: User; initialReports: ReportEx[]; myStats: MyStats; pendingQuizzes?: number; nextQuizId?: string | null }) {
+export default function Dashboard({ user, initialReports, myStats, pendingQuizzes = 0, nextQuizId = null, newEvalCount = 0 }: { user: User; initialReports: ReportEx[]; myStats: MyStats; pendingQuizzes?: number; nextQuizId?: string | null; newEvalCount?: number }) {
+  // แจ้งเตือนผลประเมิน — บอกแค่ว่ามีความเคลื่อนไหว ไม่โชว์คะแนน
+  // กดรับทราบแล้วค่อยเคลียร์ ไม่เคลียร์เองตอนเปิดหน้า เด็กจะได้ไม่พลาด
+  const [newEvals, setNewEvals] = useState(newEvalCount);
+  const ackEvals = async () => {
+    setNewEvals(0);
+    await fetch("/api/reports/seen", { method: "POST" }).catch(() => {});
+  };
+
   const [reports, setReports] = useState<ReportEx[]>(initialReports);
   const [editing, setEditing] = useState<ReportEx | null>(null);
   const [toolInput, setToolInput] = useState("");
@@ -324,6 +332,25 @@ export default function Dashboard({ user, initialReports, myStats, pendingQuizze
           ))}
         </div>
 
+        {/* ผลประเมินใหม่ — บอกแค่ว่ามีความเคลื่อนไหว ไม่บอกคะแนน กดรับทราบแล้วหาย */}
+        {newEvals > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 border shadow-sm"
+            style={{ background: "#EEF4FF", borderColor: "#C7D7F5" }}>
+            <span className="text-2xl flex-shrink-0">💬</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm" style={{ color: "#003E8E" }}>
+                พี่เลี้ยงประเมินรายงานของคุณแล้ว {newEvals} ฉบับ
+              </p>
+              <p className="text-xs mt-0.5 text-gray-500">เลื่อนลงไปดูความเห็นในรายงานที่มีป้าย ใหม่</p>
+            </div>
+            <button onClick={ackEvals}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white flex-shrink-0"
+              style={{ background: "#003E8E" }}>
+              รับทราบ
+            </button>
+          </div>
+        )}
+
         {/* Field quiz CTA — โผล่เมื่อมีโจทย์ค้างเท่านั้น */}
         {pendingQuizzes > 0 && (
           <Link href={nextQuizId ? `/training?lesson=${nextQuizId}` : "/training"}
@@ -381,6 +408,9 @@ export default function Dashboard({ user, initialReports, myStats, pendingQuizze
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
                       <span className="text-xs font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{formatDate(r.date)}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                      {r.newEval && newEvals > 0 && (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "#003E8E" }}>ใหม่</span>
+                      )}
                       {r.editReason && (
                         <button onClick={() => setShowEditReason(r.editReason!)}
                           className="text-xs px-1.5 py-0.5 rounded-full font-medium hover:opacity-80 transition-opacity"

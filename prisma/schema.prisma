@@ -80,6 +80,8 @@ model User {
   startDate     DateTime? @db.Date
   endDate       DateTime? @db.Date
   profileDone   Boolean   @default(false)
+  // ครั้งล่าสุดที่นักศึกษากดรับทราบผลประเมิน — ใช้คำนวณสด ไม่ต้องมีตาราง Notification
+  reportsSeenAt DateTime  @default(now())
 
   accounts    Account[]
   sessions    Session[]

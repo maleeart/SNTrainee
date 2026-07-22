@@ -8,7 +8,7 @@ export default async function DashboardPage() {
 
   const me = await prisma.user.findUnique({
     where: { id: u.id },
-    select: { name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true },
+    select: { name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true, reportsSeenAt: true },
   });
 
   if (!me || !me.profileDone || !isProfileComplete(me)) redirect("/profile");
@@ -16,11 +16,14 @@ export default async function DashboardPage() {
   const rawReports = await prisma.report.findMany({
     where: { userId: u.id },
     orderBy: { date: "desc" },
-    include: { evaluations: { select: { scores: true, comment: true, mentor: { select: { name: true, nickname: true } } } } },
+    include: { evaluations: { select: { scores: true, comment: true, updatedAt: true, mentor: { select: { name: true, nickname: true } } } } },
   });
 
+  // "ใหม่" = มีพี่เลี้ยงประเมิน/แก้ประเมิน หลังจากครั้งล่าสุดที่นักศึกษากดรับทราบ
+  const seenAt = me.reportsSeenAt;
+
   const reports = rawReports.map(r => {
-    const evals = r.evaluations as { scores: Record<string, number>; comment: string | null; mentor: { name: string | null; nickname: string | null } }[];
+    const evals = r.evaluations as { scores: Record<string, number>; comment: string | null; updatedAt: Date; mentor: { name: string | null; nickname: string | null } }[];
     const evalSummary = {
       count: evals.length,
       comments: evals.filter(e => e.comment?.trim()).map(e => ({
@@ -29,8 +32,10 @@ export default async function DashboardPage() {
       })),
     };
     const { evaluations: _, ...rest } = r;
-    return { ...rest, evalSummary };
+    return { ...rest, evalSummary, newEval: evals.some(e => e.updatedAt > seenAt) };
   });
+
+  const newEvalCount = reports.filter(r => r.newEval).length;
 
   // Aggregate scores
   const allEvalScores = rawReports.flatMap(r =>
@@ -63,5 +68,6 @@ export default async function DashboardPage() {
     myStats={{ totalReports: reports.length, scoredReports: reports.filter(r => r.status === "SCORED").length, criteria: myCriteria, overall: myOverall }}
     pendingQuizzes={pending.length}
     nextQuizId={pending[0]?.id ?? null}
+    newEvalCount={newEvalCount}
   />;
 }
