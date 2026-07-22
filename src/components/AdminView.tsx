@@ -1703,8 +1703,11 @@ type MonthlyCheckIn = { userId: string; date: string };
 type MonthlyLeave = { id: string; userId: string; startDate: string; endDate: string; reason: string; user: { id: string; name: string | null; nickname: string | null } };
 type MonthlyData = { students: { id: string; name: string | null; nickname: string | null; startDate: string | null; endDate: string | null }[]; checkIns: MonthlyCheckIn[]; leaves: MonthlyLeave[] };
 
+// ค่า status ภายในยังเป็น "ขาด" (ใช้เป็น key/เงื่อนไขทั่วไฟล์) — เปลี่ยนแค่คำที่ผู้ใช้เห็น
+const ABSENT_LABEL = "ไม่ลงเวลา";
+
 function statusLabel(s: "มา" | "ลา" | "ขาด") {
-  return s === "มา" ? "✅ มา" : s === "ลา" ? "📋 ลา" : "❌ ขาด";
+  return s === "มา" ? "✅ มา" : s === "ลา" ? "📋 ลา" : `❌ ${ABSENT_LABEL}`;
 }
 function statusStyle(s: "มา" | "ลา" | "ขาด") {
   return s === "มา" ? { bg: "#DCFCE7", color: "#16A34A" }
@@ -1789,7 +1792,7 @@ function AttendanceTab() {
     const dayNums = Array.from({ length: days }, (_, i) => i + 1);
 
     // Build rows
-    const headerRow = ["ชื่อ-สกุล", "ชื่อเล่น", ...dayNums.map(d => String(d)), "มา", "ลา", "ขาด"];
+    const headerRow = ["ชื่อ-สกุล", "ชื่อเล่น", ...dayNums.map(d => String(d)), "มา", "ลา", ABSENT_LABEL];
     const dataRows = monthlyData.students.map(s => {
       const counts = { มา: 0, ลา: 0, ขาด: 0 };
       const dayCells = dayNums.map(d => {
@@ -1845,7 +1848,7 @@ function AttendanceTab() {
                 <div className="flex gap-3 text-xs">
                   <span style={{ color: "#16A34A" }}>มา {dailyData.students.filter(s => s.status === "มา").length}</span>
                   <span style={{ color: "#D97706" }}>ลา {dailyData.students.filter(s => s.status === "ลา").length}</span>
-                  <span style={{ color: "#DC2626" }}>ขาด {dailyData.students.filter(s => s.status === "ขาด").length}</span>
+                  <span style={{ color: "#DC2626" }}>{ABSENT_LABEL} {dailyData.students.filter(s => s.status === "ขาด").length}</span>
                 </div>
               )}
             </div>
@@ -1985,7 +1988,7 @@ function AttendanceTab() {
                         ))}
                         <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#16A34A" }}>มา</th>
                         <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#D97706" }}>ลา</th>
-                        <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#DC2626" }}>ขาด</th>
+                        <th className="px-2 py-2 font-semibold text-center min-w-[32px]" style={{ color: "#DC2626" }}>{ABSENT_LABEL}</th>
                       </tr>
                     </thead>
                     <tbody>
