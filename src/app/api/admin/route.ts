@@ -23,18 +23,18 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.update({
       where: { id: b.userId },
-      data: { role: granted, approved: true, requestedRole: null },
+      data: { role: granted, approved: true, requestedRole: null, rejected: false },
     });
-    return NextResponse.json({ id: user.id, role: user.role, approved: user.approved });
+    return NextResponse.json({ id: user.id, role: user.role, approved: user.approved, rejected: false });
   }
 
-  // ปฏิเสธคำขอ — ล้างคำขอทิ้ง ผู้ใช้ยังค้างหน้ารออนุมัติ เลือกสิทธิ์ใหม่ได้
+  // ปฏิเสธคำขอ — ผู้ใช้จะเห็นหน้าแจ้งว่าถูกปฏิเสธ ให้ติดต่อผู้ดูแลระบบ
   if (b.op === "reject") {
     const user = await prisma.user.update({
       where: { id: b.userId },
-      data: { approved: false, requestedRole: null },
+      data: { approved: false, requestedRole: null, rejected: true },
     });
-    return NextResponse.json({ id: user.id, approved: user.approved });
+    return NextResponse.json({ id: user.id, approved: user.approved, rejected: user.rejected });
   }
 
   if (b.op === "role") {

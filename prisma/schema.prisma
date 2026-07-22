@@ -87,6 +87,8 @@ model User {
   // role = สิทธิ์จริงที่ใช้งานได้ · requestedRole = สิทธิ์ที่ขอไว้ ยังไม่มีผลจนกว่าจะอนุมัติ
   approved      Boolean   @default(false)
   requestedRole Role?
+  // แอดมินกดปฏิเสธ — แยกจาก "ยังไม่ได้กด" เพื่อให้หน้ารออนุมัติบอกผู้ใช้ได้ตรงๆ
+  rejected      Boolean   @default(false)
 
   accounts    Account[]
   sessions    Session[]

@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/guards";
 import { prisma } from "@/lib/prisma";
-import { schoolOptions } from "@/lib/labels";
+import { SCHOOL_PRESETS } from "@/lib/labels";
 import AdminView from "@/components/AdminView";
 
 export default async function AdminPage() {
@@ -14,7 +14,7 @@ export default async function AdminPage() {
   const [users, reports, fieldLessons] = await Promise.all([
     prisma.user.findMany({
       orderBy: { role: "asc" },
-      select: { id: true, name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true, approved: true, requestedRole: true },
+      select: { id: true, name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true, approved: true, requestedRole: true, rejected: true },
     }),
     prisma.report.findMany({
       orderBy: [{ status: "asc" }, { date: "desc" }],
@@ -51,7 +51,7 @@ export default async function AdminPage() {
       users={JSON.parse(JSON.stringify(users))}
       reports={JSON.parse(JSON.stringify(reports))}
       quizzes={JSON.parse(JSON.stringify(quizzes))}
-      schools={schoolOptions(users.map(u => u.school))}
+      schools={SCHOOL_PRESETS}
     />
   );
 }

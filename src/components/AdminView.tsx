@@ -9,7 +9,7 @@ import AppNav from "./AppNav";
 import { ROLE_LABEL, LEVEL_LABEL, STATUS_LABEL, STATUS_COLOR, SCORE_CRITERIA, weightedScore, passBar, withQuizBonus, quizAvgFor, QUIZ_BONUS_MAX, isWeekend } from "@/lib/labels";
 
 type EvalRecord = { id: string; mentorId: string; scores: Record<string, number>; comment: string | null; mentor: { id: string; name: string | null; nickname: string | null } };
-type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean; approved?: boolean; requestedRole?: string | null };
+type U = { id: string; name: string | null; nickname: string | null; email: string | null; image: string | null; role: string; level: string | null; school: string | null; advisor: string | null; startDate: string | null; endDate: string | null; profileDone: boolean; approved?: boolean; requestedRole?: string | null; rejected?: boolean };
 type Rep = {
   id: string; date: string; title: string; description: string; location: string | null;
   learned: string | null; solution: string | null; result: string | null;
@@ -94,10 +94,10 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
   };
 
   const rejectUser = async (userId: string) => {
-    if (!confirm("ปฏิเสธคำขอนี้?\nผู้ใช้จะยังอยู่หน้ารออนุมัติ และเลือกสิทธิ์ใหม่ได้")) return;
+    if (!confirm("ปฏิเสธคำขอนี้?\nผู้ใช้จะเห็นข้อความว่าถูกปฏิเสธ และให้ติดต่อผู้ดูแลระบบ")) return;
     const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "reject", userId }) });
     if (!res.ok) return alert("ปฏิเสธไม่สำเร็จ");
-    setUsers(prev => prev.map(x => (x.id === userId ? { ...x, approved: false, requestedRole: null } : x)));
+    setUsers(prev => prev.map(x => (x.id === userId ? { ...x, approved: false, requestedRole: null, rejected: true } : x)));
   };
 
   const editUser = async (userId: string, data: Partial<U>): Promise<boolean> => {
@@ -1209,7 +1209,9 @@ function UsersTab({ users, readOnly, onSetRole, onDetail, onApprove, onReject }:
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-xs text-gray-500">ขอสิทธิ์</span>
+                  {u.rejected
+                    ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">ปฏิเสธแล้ว</span>
+                    : <span className="text-xs text-gray-500">ขอสิทธิ์</span>}
                   {readOnly ? (
                     <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-white border border-amber-200" style={{ color: "#92400E" }}>
                       {u.requestedRole ? ROLE_LABEL[u.requestedRole] : "—"}
@@ -1227,10 +1229,12 @@ function UsersTab({ users, readOnly, onSetRole, onDetail, onApprove, onReject }:
                       }} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: "#16A34A" }}>
                         อนุมัติ
                       </button>
-                      <button onClick={() => onReject(u.id)}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50">
-                        ปฏิเสธ
-                      </button>
+                      {!u.rejected && (
+                        <button onClick={() => onReject(u.id)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 bg-white hover:bg-red-50">
+                          ปฏิเสธ
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

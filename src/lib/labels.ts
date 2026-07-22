@@ -5,19 +5,13 @@ export const ROLE_LABEL: Record<string, string> = {
   EXECUTIVE: "ผู้สังเกตการณ์",
 };
 
-// สถานศึกษาตั้งต้น — รายการที่ผู้ใช้กรอกเอง ("อื่นๆ") จะถูกดึงจาก DB มาต่อท้ายอัตโนมัติ
+// สถานศึกษา — มีแค่ 2 รายการนี้ + "อื่นๆ (กรอกเอง)" เท่านั้น
+// ตั้งใจไม่ดึงค่าเก่าจาก DB มาต่อท้าย ไม่งั้นรายการจะรกด้วยชื่อที่พิมพ์ไว้นานแล้ว
+// (ข้อมูลเดิมของนักศึกษาไม่หาย — ค่าที่ไม่อยู่ในรายการจะเด้งไปโชว์ในช่อง "อื่นๆ" ให้เอง)
 export const SCHOOL_PRESETS = [
   "โรงเรียนกองทัพอุปถัมภ์ ช่างกล ขส.ทบ.",
   "มหาวิทยาลัยเทคโนโลยีราชมงคลพระนคร",
 ];
-
-// รวม preset + ที่เคยมีคนกรอกไว้แล้ว ไม่ซ้ำ เรียง preset ขึ้นก่อนเสมอ
-export function schoolOptions(fromDb: (string | null)[]): string[] {
-  const extra = [...new Set(fromDb.filter((s): s is string => !!s?.trim()).map(s => s.trim()))]
-    .filter(s => !SCHOOL_PRESETS.includes(s))
-    .sort((a, b) => a.localeCompare(b, "th"));
-  return [...SCHOOL_PRESETS, ...extra];
-}
 
 export const LEVEL_LABEL: Record<string, string> = {
   PVC: "ปวช.",

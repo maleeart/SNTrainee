@@ -169,7 +169,6 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
                   <input className="input" autoFocus value={form.school}
                     onChange={e => setForm({ ...form, school: e.target.value })}
                     placeholder="พิมพ์ชื่อสถานศึกษา" />
-                  <p className="text-xs text-gray-400 mt-1">ชื่อที่กรอกจะถูกเพิ่มในรายการให้คนถัดไปเลือกได้</p>
                 </F>
               )}
               <F label="อาจารย์นิเทศ">
