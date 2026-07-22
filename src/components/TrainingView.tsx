@@ -518,22 +518,32 @@ type QuizResult = {
   quiz: { lesson: { title: string } };
 };
 
-function CourseQuizResults({ courseId, meId, isAdmin }: { courseId: string; meId: string; isAdmin: boolean }) {
+type Student = { id: string; name: string | null; nickname: string | null };
+
+function CourseQuizResults({ courseId, meId, isAdmin, grouped }: { courseId: string; meId: string; isAdmin: boolean; grouped?: boolean }) {
   const [results, setResults] = useState<QuizResult[] | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
 
   useEffect(() => {
     setResults(null);
-    fetch(`/api/training/results?courseId=${courseId}`)
+    // grouped (โจทย์หน้างาน) ขอรายชื่อนักศึกษาทั้งหมดมาด้วย เพื่อรู้ว่าใคร "ไม่ทำ"
+    fetch(`/api/training/results?courseId=${courseId}${grouped && isAdmin ? "&roster=1" : ""}`)
       .then(r => r.json())
-      .then(setResults)
-      .catch(() => setResults([]));
-  }, [courseId]);
+      .then(d => {
+        if (Array.isArray(d)) { setResults(d); setStudents([]); }
+        else { setResults(d.rows); setStudents(d.students ?? []); }
+      })
+      .catch(() => { setResults([]); setStudents([]); });
+  }, [courseId, grouped, isAdmin]);
 
   if (results === null) return <div className="px-5 py-4 text-xs text-gray-400">กำลังโหลดผลคะแนน...</div>;
   if (results.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">ยังไม่มีผลแบบทดสอบในหลักสูตรนี้</div>;
 
   const rows = isAdmin ? results : results.filter(r => r.user.id === meId);
   if (rows.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">ยังไม่มีผลแบบทดสอบ</div>;
+
+  // โจทย์หน้างาน: จัดกลุ่มตามข้อ คลิกดูว่าใครทำ + คะแนน "ครั้งแรก" เท่านั้น (คะแนนที่นับจริง)
+  if (grouped && isAdmin) return <FieldQuizRoster rows={rows} students={students} />;
 
   return (
     <div className="border-t border-gray-100 mt-0">
@@ -579,6 +589,79 @@ function CourseQuizResults({ courseId, meId, isAdmin }: { courseId: string; meId
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// โจทย์หน้างาน: กลุ่มตามข้อ → เก็บเฉพาะ "ครั้งแรก" ต่อคน (คะแนนที่นับจริง) → คลิกกางดูรายชื่อ
+function FieldQuizRoster({ rows, students }: { rows: QuizResult[]; students: Student[] }) {
+  // rows มาจาก API เรียง createdAt จากใหม่ไปเก่า → ทับค่าไปเรื่อยๆ เหลือ "เก่าสุด" = ครั้งแรก
+  const byLesson = new Map<string, { title: string; date: string; firsts: Map<string, QuizResult> }>();
+  for (const r of rows) {
+    const key = r.quiz.lesson.title;
+    let g = byLesson.get(key);
+    if (!g) { g = { title: key, date: r.createdAt, firsts: new Map() }; byLesson.set(key, g); }
+    g.firsts.set(r.user.id, r); // desc → ทับจนเหลือ attempt เก่าสุดของคนนั้น
+    if (r.createdAt < g.date) g.date = r.createdAt;
+  }
+  const groups = [...byLesson.values()].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="border-t border-gray-100">
+      <div className="px-5 py-3 border-b border-gray-50 bg-gray-50/50">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">โจทย์หน้างาน · {groups.length} ข้อ · คะแนนครั้งแรกที่นับจริง</p>
+      </div>
+      {groups.map(g => {
+        const people = [...g.firsts.values()].sort((a, b) => b.score - a.score);
+        const missing = students.filter(s => !g.firsts.has(s.id)); // ยังไม่ทำข้อนี้
+        return (
+          <details key={g.title} className="border-b border-gray-50 group">
+            <summary className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 list-none">
+              <span className="text-gray-300 text-xs group-open:rotate-90 transition-transform">▶</span>
+              <span className="text-sm font-medium text-gray-700 flex-1 min-w-0 truncate">📍 {g.title}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">
+                ทำแล้ว {people.length}{missing.length > 0 && <span className="text-amber-500"> · ค้าง {missing.length}</span>}
+              </span>
+            </summary>
+            <div className="overflow-x-auto pb-1">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-gray-50">
+                  {people.map(r => (
+                    <tr key={r.user.id} className="hover:bg-gray-50">
+                      <td className="pl-11 pr-4 py-2">
+                        <span className="text-xs font-medium text-gray-700">{r.user.nickname || r.user.name || "-"}</span>
+                        {r.user.nickname && <span className="text-xs text-gray-400 ml-1">{r.user.name}</span>}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="font-bold text-sm" style={{ color: r.passed ? "#10B981" : "#EF4444" }}>{r.score}%</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                          {r.passed ? "ผ่าน" : "ไม่ผ่าน"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-gray-400 whitespace-nowrap text-right pr-5">
+                        {new Date(r.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
+                      </td>
+                    </tr>
+                  ))}
+                  {missing.map(s => (
+                    <tr key={s.id} className="bg-amber-50/40">
+                      <td className="pl-11 pr-4 py-2">
+                        <span className="text-xs font-medium text-gray-500">{s.nickname || s.name || "-"}</span>
+                        {s.nickname && <span className="text-xs text-gray-400 ml-1">{s.name}</span>}
+                      </td>
+                      <td colSpan={3} className="px-4 py-2 text-center">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">ยังไม่ทำ</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }
@@ -760,7 +843,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
                   </div>
                 )}
                 {selected.lessons.some(l => l.quiz) && (
-                  <CourseQuizResults courseId={selected.id} meId={meId} isAdmin={isAdminOrExec} />
+                  <CourseQuizResults courseId={selected.id} meId={meId} isAdmin={isAdminOrExec} grouped={selected.fieldQuiz} />
                 )}
               </div>
             ) : (

@@ -29,6 +29,12 @@ export async function GET(req: NextRequest) {
     },
   });
 
+  // โจทย์หน้างาน: ต้องรู้ว่าใคร "ไม่ทำ" ด้วย → แนบรายชื่อนักศึกษาทั้งหมด (เฉพาะแอดมิน)
+  // ponytail: รายชื่อนักศึกษาทั้งหมด ไม่กรองตามช่วงฝึก — ถ้าเริ่มมีคนจบไปแล้วรก ค่อยกรองด้วย start/endDate
+  const roster = isAdmin && req.nextUrl.searchParams.get("roster")
+    ? await prisma.user.findMany({ where: { role: "STUDENT" }, select: { id: true, name: true, nickname: true } })
+    : undefined;
+
   const rows = attempts.map(a => {
     const questions = a.quiz.questions as { answer: number }[];
     const answers = a.answers as number[];
@@ -46,5 +52,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json(rows);
+  return NextResponse.json(roster ? { rows, students: roster } : rows);
 }
