@@ -59,6 +59,9 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
   const allStudents = users.filter(u => u.role === "STUDENT");
   const mentors = users.filter(u => u.role === "MENTOR" || u.role === "ADMIN");
+  // "ประเมินครบ" = แอดมินประเมินแล้ว (พี่เลี้ยงประเมินไม่เท่ากันมาก ใช้ "ครบทุกคน" แล้วจะได้ 0 ตลอด)
+  // ⚠️ ใช้กับการ์ดนับเท่านั้น — การคิดคะแนนยังใช้ evaluation ของทุกคนเหมือนเดิม
+  const adminIds = new Set(users.filter(u => u.role === "ADMIN").map(u => u.id));
 
   // Build sorted batch list from students with start/end dates
   const batchKeys = [...new Set(allStudents.map(s => batchKey(s)).filter(Boolean) as string[])].sort();
@@ -257,9 +260,9 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
           })()}
 
           <div className="p-5 md:p-6 max-w-6xl mx-auto">
-            {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
-            {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} onEval={setEvalTarget} />}
-            {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} />}
+            {tab === "overview" && <OverviewTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} adminIds={adminIds} />}
+            {tab === "logs"     && <LogsTab reports={filteredReportsByBatch} meId={meId} readOnly={readOnly} adminIds={adminIds} onEval={setEvalTarget} />}
+            {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} adminIds={adminIds} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} onApprove={approveUser} onReject={rejectUser} />}
             {tab === "announce"   && <AnnounceTab readOnly={readOnly} />}
             {tab === "attendance" && <AttendanceTab />}
@@ -282,12 +285,15 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ reports, students, quizzes }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[] }) {
+function OverviewTab({ reports, students, quizzes, adminIds }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[]; adminIds: Set<string> }) {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
 
-  const scored = reports.filter(r => r.status === "SCORED");
-  const pending = reports.filter(r => r.status === "PENDING");
+  // นับจาก "แอดมินประเมินหรือยัง" ไม่ใช่ Report.status
+  // (status ยังเป็นกุญแจล็อกแก้/ลบรายงาน ตั้งแต่คนแรกประเมิน — ห้ามเอามาปนกัน)
+  const adminDone = (r: Rep) => r.evaluations.some(e => adminIds.has(e.mentorId));
+  const scored = reports.filter(adminDone);
+  const pending = reports.filter(r => !adminDone(r));
 
   // Internship period from students' dates
   const startDates = students.map(s => s.startDate).filter(Boolean) as string[];
@@ -410,14 +416,16 @@ function OverviewTab({ reports, students, quizzes }: { reports: Rep[]; students:
           <div className="divide-y divide-gray-50">
             {recent.map(r => (
               <div key={r.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5" style={{ background: r.status === "PENDING" ? "#F59E0B" : "#10B981" }} />
+                <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-0.5" style={{ background: adminDone(r) ? "#10B981" : "#F59E0B" }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{r.title}</p>
                   <p className="text-xs text-gray-400">{r.user.name}{r.user.nickname ? ` (${r.user.nickname})` : ""}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-gray-500">{fmtDate(r.date.slice(0, 10))}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${adminDone(r) ? STATUS_COLOR.SCORED : STATUS_COLOR.PENDING}`}>
+                    {adminDone(r) ? STATUS_LABEL.SCORED : STATUS_LABEL.PENDING}
+                  </span>
                 </div>
               </div>
             ))}
@@ -590,15 +598,18 @@ function ScoreBarChart({ stats }: { stats: { student: U; reportCount: number; ev
 
 // ─── Logs Tab (บันทึกการฝึกงาน) ──────────────────────────────────────────────
 
-function LogsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; onEval: (r: Rep) => void }) {
+function LogsTab({ reports, meId, readOnly, adminIds, onEval }: { reports: Rep[]; meId: string; readOnly: boolean; adminIds: Set<string>; onEval: (r: Rep) => void }) {
   const [filter, setFilter] = useState("ALL");
   const [studentFilter, setStudentFilter] = useState("ALL");
 
   // unique students from reports
   const studentList = Array.from(new Map(reports.map(r => [r.user.id, r.user])).values());
 
+  // ใช้เกณฑ์เดียวกับการ์ดภาพรวม (แอดมินประเมินหรือยัง) ไม่ใช่ Report.status
+  // ไม่งั้นการ์ดบอก "รอประเมิน 3" แต่กรองในหน้านี้จะได้ 0 เพราะ status ถูกตั้งตั้งแต่คนแรกประเมิน
+  const adminDone = (r: Rep) => r.evaluations.some(e => adminIds.has(e.mentorId));
   const filtered = reports.filter(r =>
-    (filter === "ALL" || r.status === filter) &&
+    (filter === "ALL" || (filter === "SCORED" ? adminDone(r) : !adminDone(r))) &&
     (studentFilter === "ALL" || r.user.id === studentFilter)
   );
 
@@ -646,8 +657,8 @@ function LogsTab({ reports, meId, readOnly, onEval }: { reports: Rep[]; meId: st
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLOR[r.status]}`}>
-                    {STATUS_LABEL[r.status]}
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${adminDone(r) ? STATUS_COLOR.SCORED : STATUS_COLOR.PENDING}`}>
+                    {adminDone(r) ? STATUS_LABEL.SCORED : STATUS_LABEL.PENDING}
                   </span>
                   {!readOnly && (
                     <button onClick={() => onEval(r)}
@@ -854,7 +865,7 @@ function ScoreColor(v: number | null): { bg: string; fg: string } {
   return { bg: "#FEE2E2", fg: "#B91C1C" };
 }
 
-function ExportTab({ reports, students, quizzes }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[] }) {
+function ExportTab({ reports, students, quizzes, adminIds }: { reports: Rep[]; students: U[]; quizzes: FieldQuiz[]; adminIds: Set<string> }) {
   const [selectedStudentId, setSelectedStudentId] = useState("ALL");
 
   // ถ่วงน้ำหนักด้วยสูตร + nMax เดียวกับหน้าภาพรวม เพื่อให้ตัวเลขตรงกันทุกหน้า
@@ -877,7 +888,8 @@ function ExportTab({ reports, students, quizzes }: { reports: Rep[]; students: U
 
   // Summary stats
   const totalReports = reports.length;
-  const scoredReports = reports.filter(r => r.status === "SCORED").length;
+  // ให้ตรงกับการ์ดภาพรวม — "ประเมินแล้ว" = แอดมินประเมินแล้ว
+  const scoredReports = reports.filter(r => r.evaluations.some(e => adminIds.has(e.mentorId))).length;
   const allEvals = reports.flatMap(r => r.evaluations);
   const allScores = allEvals.flatMap(e => Object.values(e.scores).filter(Boolean) as number[]);
   const globalAvg = allScores.length ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
@@ -956,7 +968,7 @@ function ExportTab({ reports, students, quizzes }: { reports: Rep[]; students: U
           truncate(r.result ?? "", 80),
           truncate((r.tools ?? []).join(", "), 50),
           truncate((r.ppe ?? []).join(", "), 60),
-          STATUS_LABEL[r.status] ?? r.status,
+          r.evaluations.some(e => adminIds.has(e.mentorId)) ? STATUS_LABEL.SCORED : STATUS_LABEL.PENDING,
           r.evaluations.length,
           ov != null ? +ov.toFixed(2) : "",
           ...SCORE_CRITERIA.map(c => crit[c.key] != null ? +crit[c.key].toFixed(2) : ""),
