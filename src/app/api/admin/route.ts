@@ -73,22 +73,12 @@ export async function POST(req: NextRequest) {
   if (b.op === "delete") {
     if (b.userId === session.user.id) return NextResponse.json({ error: "ลบบัญชีตนเองไม่ได้" }, { status: 400 });
     try {
-      // Clean up relations to prevent foreign key constraint violations
-      await prisma.evaluation.deleteMany({ where: { mentorId: b.userId } });
-
-      await prisma.course.updateMany({
-        where: { createdById: b.userId },
-        data: { createdById: session.user.id }
-      });
-
-      await prisma.courseLesson.updateMany({
-        where: { createdById: b.userId },
-        data: { createdById: null }
-      });
-
-      await prisma.announcement.deleteMany({ where: { createdById: b.userId } });
-
-      await prisma.user.delete({ where: { id: b.userId } });
+      // ⚠️ Use raw SQL to avoid Prisma client-side cascade logic which wraps in transactions (unsupported in Neon HTTP mode)
+      await prisma.$executeRaw`DELETE FROM "Evaluation" WHERE "mentorId" = ${b.userId}`;
+      await prisma.$executeRaw`UPDATE "Course" SET "createdById" = ${session.user.id} WHERE "createdById" = ${b.userId}`;
+      await prisma.$executeRaw`UPDATE "CourseLesson" SET "createdById" = NULL WHERE "createdById" = ${b.userId}`;
+      await prisma.$executeRaw`DELETE FROM "Announcement" WHERE "createdById" = ${b.userId}`;
+      await prisma.$executeRaw`DELETE FROM "User" WHERE "id" = ${b.userId}`;
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       console.error("Delete user error:", err);
