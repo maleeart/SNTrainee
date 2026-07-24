@@ -70,19 +70,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ลบผู้ใช้ (ลบประกาศที่สร้างไว้ก่อน เพราะ FK ไม่ cascade)
   if (b.op === "delete") {
     if (b.userId === session.user.id) return NextResponse.json({ error: "ลบบัญชีตนเองไม่ได้" }, { status: 400 });
-    // $transaction ใช้ไม่ได้บน Neon HTTP mode — แต่ SQL คำสั่งเดียวเป็น atomic ในตัวอยู่แล้ว
-    // CTE นี้จึงยังการันตี all-or-nothing: ประกาศจะไม่หายถ้าลบ user ไม่สำเร็จ
-    const deleted = await prisma.$executeRaw`
-      WITH del_ann AS (
-        DELETE FROM "Announcement" WHERE "createdById" = ${b.userId}
-      )
-      DELETE FROM "User" WHERE id = ${b.userId}
-    `;
-    if (deleted === 0) return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
-    return NextResponse.json({ ok: true });
+    try {
+      // Clean up relations to prevent foreign key constraint violations
+      await prisma.evaluation.deleteMany({ where: { mentorId: b.userId } });
+
+      await prisma.course.updateMany({
+        where: { createdById: b.userId },
+        data: { createdById: session.user.id }
+      });
+
+      await prisma.courseLesson.updateMany({
+        where: { createdById: b.userId },
+        data: { createdById: null }
+      });
+
+      await prisma.announcement.deleteMany({ where: { createdById: b.userId } });
+
+      await prisma.user.delete({ where: { id: b.userId } });
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error("Delete user error:", err);
+      return NextResponse.json({ error: `ลบไม่สำเร็จ: ${err.message || String(err)}` }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ error: "op ไม่ถูกต้อง" }, { status: 400 });
