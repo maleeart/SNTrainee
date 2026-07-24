@@ -3,6 +3,7 @@ export const ROLE_LABEL: Record<string, string> = {
   MENTOR: "พี่เลี้ยง",
   ADMIN: "ผู้ดูแลระบบ",
   EXECUTIVE: "ผู้สังเกตการณ์",
+  ADVISOR: "อาจารย์ที่ปรึกษา",
 };
 
 // สถานศึกษา — มีแค่ 2 รายการนี้ + "อื่นๆ (กรอกเอง)" เท่านั้น

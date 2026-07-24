@@ -11,6 +11,7 @@ enum Role {
   MENTOR
   ADMIN
   EXECUTIVE
+  ADVISOR
 }
 
 enum Level {

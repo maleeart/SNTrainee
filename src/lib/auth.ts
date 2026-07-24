@@ -17,13 +17,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, user }) {
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { role: true, profileDone: true, approved: true },
+        select: { role: true, profileDone: true, approved: true, school: true },
       });
       session.user.id = user.id;
       session.user.role = dbUser?.role ?? "STUDENT";
       session.user.profileDone = dbUser?.profileDone ?? false;
       // ผู้ใช้ใหม่ = false จนกว่าแอดมินจะอนุมัติ — guards ใช้ค่านี้กันเข้าทุกหน้า
       session.user.approved = dbUser?.approved ?? false;
+      session.user.school = dbUser?.school ?? null;
       return session;
     },
   },

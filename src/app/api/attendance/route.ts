@@ -8,7 +8,7 @@ function thaiToday() {
 }
 
 function requireAdmin(role: string) {
-  return role === "ADMIN" || role === "EXECUTIVE";
+  return role === "ADMIN" || role === "EXECUTIVE" || role === "ADVISOR";
 }
 
 // GET /api/attendance?date=YYYY-MM-DD  — daily view
@@ -22,7 +22,10 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month");
 
   const students = await prisma.user.findMany({
-    where: { role: "STUDENT" },
+    where: {
+      role: "STUDENT",
+      ...(session.user.role === "ADVISOR" ? { school: session.user.school } : {}),
+    },
     select: { id: true, name: true, nickname: true, startDate: true, endDate: true },
     orderBy: { startDate: "asc" },
   });
@@ -34,9 +37,18 @@ export async function GET(req: NextRequest) {
     end.setMonth(end.getMonth() + 1);
 
     const [checkIns, leaves] = await Promise.all([
-      prisma.checkIn.findMany({ where: { date: { gte: start, lt: end } } }),
+      prisma.checkIn.findMany({
+        where: {
+          date: { gte: start, lt: end },
+          ...(session.user.role === "ADVISOR" ? { user: { school: session.user.school } } : {}),
+        }
+      }),
       prisma.leaveRequest.findMany({
-        where: { startDate: { lt: end }, endDate: { gte: start } },
+        where: {
+          startDate: { lt: end },
+          endDate: { gte: start },
+          ...(session.user.role === "ADVISOR" ? { user: { school: session.user.school } } : {}),
+        },
         include: { user: { select: { id: true, name: true, nickname: true } } },
       }),
     ]);
@@ -49,9 +61,21 @@ export async function GET(req: NextRequest) {
   const date = new Date(dateStr);
 
   const [checkIns, leaves, allLeaves] = await Promise.all([
-    prisma.checkIn.findMany({ where: { date } }),
-    prisma.leaveRequest.findMany({ where: { startDate: { lte: date }, endDate: { gte: date } } }),
+    prisma.checkIn.findMany({
+      where: {
+        date,
+        ...(session.user.role === "ADVISOR" ? { user: { school: session.user.school } } : {}),
+      }
+    }),
     prisma.leaveRequest.findMany({
+      where: {
+        startDate: { lte: date },
+        endDate: { gte: date },
+        ...(session.user.role === "ADVISOR" ? { user: { school: session.user.school } } : {}),
+      }
+    }),
+    prisma.leaveRequest.findMany({
+      where: session.user.role === "ADVISOR" ? { user: { school: session.user.school } } : {},
       orderBy: { startDate: "desc" },
       include: { user: { select: { id: true, name: true, nickname: true } } },
     }),
@@ -80,7 +104,7 @@ export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!session.user.approved) return NextResponse.json({ error: "รอผู้ดูแลอนุมัติสิทธิ์" }, { status: 403 });
-  if (!requireAdmin(session.user.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { userId, date: dateStr, action } = await req.json();
   if (!userId || !dateStr || !action) return NextResponse.json({ error: "Invalid request" }, { status: 400 });

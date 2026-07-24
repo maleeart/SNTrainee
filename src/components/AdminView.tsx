@@ -120,11 +120,13 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
     return true;
   };
 
+  const meRole = users.find(u => u.id === meId)?.role;
+
   const NAV: { id: Tab; label: string; badge?: number; icon: React.ReactNode }[] = [
     { id: "overview",  label: "ภาพรวม",           icon: <IconGrid /> },
     { id: "logs",      label: "บันทึกการฝึกงาน",  badge: pending, icon: <IconClipboard /> },
     { id: "export",    label: "รายงาน",            icon: <IconExport /> },
-    { id: "users",     label: "ผู้ใช้งาน",         icon: <IconUsers /> },
+    ...(meRole !== "ADVISOR" ? [{ id: "users" as Tab,     label: "ผู้ใช้งาน",         icon: <IconUsers /> }] : []),
     { id: "announce",   label: "ประกาศ",            icon: <IconMega /> },
     { id: "attendance", label: "บันทึกลงเวลา",     icon: <IconClock /> },
   ];
@@ -219,7 +221,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
       <div className="flex-1 flex flex-col min-w-0 md:h-screen">
         {/* AppNav confined to content column — brand hidden on desktop (sidebar has it), page title on left */}
         <div className="shrink-0">
-          <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={readOnly ? "EXECUTIVE" : "ADMIN"} profileHref="/profile"
+          <AppNav name={meName} nickname={meNickname} email={meEmail} image={meImage} role={meRole ?? (readOnly ? "EXECUTIVE" : "ADMIN")} profileHref="/profile"
             fullWidth hideBrandDesktop
             desktopTitle={
               <div className="flex items-center gap-2.5 text-white">
@@ -265,7 +267,7 @@ export default function AdminView({ readOnly, meId, meName, meNickname, meEmail,
             {tab === "export"   && <ExportTab reports={filteredReportsByBatch} students={students} quizzes={quizzes} adminIds={adminIds} />}
             {tab === "users"    && <UsersTab users={users} readOnly={readOnly} onSetRole={setRole} onDetail={setDetailUser} onApprove={approveUser} onReject={rejectUser} />}
             {tab === "announce"   && <AnnounceTab readOnly={readOnly} />}
-            {tab === "attendance" && <AttendanceTab />}
+            {tab === "attendance" && <AttendanceTab readOnly={readOnly} />}
           </div>
         </main>
       </div>
@@ -1187,9 +1189,9 @@ function ExportTab({ reports, students, quizzes, adminIds }: { reports: Rep[]; s
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
-const ROLE_ORDER = ["ADMIN", "MENTOR", "STUDENT", "EXECUTIVE"] as const;
-const ROLE_SECTION_LABEL: Record<string, string> = { ADMIN: "ผู้ดูแลระบบ", MENTOR: "พี่เลี้ยง", STUDENT: "นักศึกษาฝึกงาน", EXECUTIVE: "ผู้สังเกตการณ์" };
-const ROLE_SECTION_COLOR: Record<string, string> = { ADMIN: "#7C3AED", MENTOR: "#003E8E", STUDENT: "#059669", EXECUTIVE: "#B45309" };
+const ROLE_ORDER = ["ADMIN", "MENTOR", "STUDENT", "EXECUTIVE", "ADVISOR"] as const;
+const ROLE_SECTION_LABEL: Record<string, string> = { ADMIN: "ผู้ดูแลระบบ", MENTOR: "พี่เลี้ยง", STUDENT: "นักศึกษาฝึกงาน", EXECUTIVE: "ผู้สังเกตการณ์", ADVISOR: "อาจารย์ที่ปรึกษา" };
+const ROLE_SECTION_COLOR: Record<string, string> = { ADMIN: "#7C3AED", MENTOR: "#003E8E", STUDENT: "#059669", EXECUTIVE: "#B45309", ADVISOR: "#DB2777" };
 
 function UsersTab({ users, readOnly, onSetRole, onDetail, onApprove, onReject }: {
   users: U[]; readOnly: boolean; onSetRole: (id: string, role: string) => void; onDetail: (u: U) => void;
@@ -1237,7 +1239,7 @@ function UsersTab({ users, readOnly, onSetRole, onDetail, onApprove, onReject }:
                       {/* แอดมินเปลี่ยนสิทธิ์ที่จะให้ได้ ไม่ต้องอนุมัติตามที่ขอเป๊ะๆ */}
                       <select defaultValue={u.requestedRole ?? "EXECUTIVE"} id={`req-${u.id}`}
                         className="border border-amber-200 rounded-lg px-2 py-1 text-xs bg-white">
-                        {["STUDENT", "MENTOR", "EXECUTIVE"].map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                        {["STUDENT", "MENTOR", "EXECUTIVE", "ADVISOR"].map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </select>
                       <button onClick={() => {
                         const sel = document.getElementById(`req-${u.id}`) as HTMLSelectElement | null;
@@ -1338,6 +1340,7 @@ function UserDetailModal({ user: u, reports, readOnly, meId, schools = [], onEdi
   });
   const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }));
   const isStudent = form.role === "STUDENT";
+  const isAdvisor = form.role === "ADVISOR";
 
   // สถานศึกษาเดิมไม่อยู่ในรายการ = เคยกรอกเอง → เปิดช่องกรอกค้างไว้
   const [schoolPick, setSchoolPick] = useState(
@@ -1350,7 +1353,7 @@ function UserDetailModal({ user: u, reports, readOnly, meId, schools = [], onEdi
     const ok = await onEdit(u.id, {
       name: form.name, nickname: form.nickname, role: form.role,
       level: isStudent ? form.level : null,
-      school: isStudent ? form.school : null,
+      school: (isStudent || isAdvisor) ? form.school : null,
       advisor: isStudent ? form.advisor : null,
       startDate: isStudent && form.startDate ? form.startDate : null,
       endDate: isStudent && form.endDate ? form.endDate : null,
@@ -1396,14 +1399,16 @@ function UserDetailModal({ user: u, reports, readOnly, meId, schools = [], onEdi
                 {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </Field>
-            {isStudent && (
+            {(isStudent || isAdvisor) && (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="ระดับ">
-                    <select value={form.level} onChange={e => set({ level: e.target.value })} className="ipt">
-                      {Object.entries(LEVEL_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                  </Field>
+                  {isStudent && (
+                    <Field label="ระดับ">
+                      <select value={form.level} onChange={e => set({ level: e.target.value })} className="ipt">
+                        {Object.entries(LEVEL_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </Field>
+                  )}
                   <Field label="สถานศึกษา">
                     <select value={schoolPick} className="ipt"
                       onChange={e => {
@@ -1421,17 +1426,21 @@ function UserDetailModal({ user: u, reports, readOnly, meId, schools = [], onEdi
                     )}
                   </Field>
                 </div>
-                <Field label="อาจารย์นิเทศ">
-                  <input value={form.advisor} onChange={e => set({ advisor: e.target.value })} className="ipt" />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="เริ่มฝึก">
-                    <input type="date" value={form.startDate} onChange={e => set({ startDate: e.target.value })} className="ipt" />
-                  </Field>
-                  <Field label="สิ้นสุด">
-                    <input type="date" value={form.endDate} onChange={e => set({ endDate: e.target.value })} className="ipt" />
-                  </Field>
-                </div>
+                {isStudent && (
+                  <>
+                    <Field label="อาจารย์นิเทศ">
+                      <input value={form.advisor} onChange={e => set({ advisor: e.target.value })} className="ipt" />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="เริ่มฝึก">
+                        <input type="date" value={form.startDate} onChange={e => set({ startDate: e.target.value })} className="ipt" />
+                      </Field>
+                      <Field label="สิ้นสุด">
+                        <input type="date" value={form.endDate} onChange={e => set({ endDate: e.target.value })} className="ipt" />
+                      </Field>
+                    </div>
+                  </>
+                )}
               </>
             )}
             <div className="flex gap-2 pt-2">
@@ -1638,6 +1647,7 @@ const TARGET_OPTIONS = [
   { value: "MENTOR",    label: "พี่เลี้ยง" },
   { value: "ADMIN",     label: "ผู้ดูแล" },
   { value: "EXECUTIVE", label: "ผู้สังเกตการณ์" },
+  { value: "ADVISOR",   label: "อาจารย์ที่ปรึกษา" },
 ];
 const TARGET_BADGE: Record<string, { bg: string; fg: string }> = {
   ALL:       { bg: "#EEF4FF", fg: "#003E8E" },
@@ -1645,6 +1655,7 @@ const TARGET_BADGE: Record<string, { bg: string; fg: string }> = {
   MENTOR:    { bg: "#FFF7ED", fg: "#C2410C" },
   ADMIN:     { bg: "#F5F3FF", fg: "#7C3AED" },
   EXECUTIVE: { bg: "#FEF3C7", fg: "#92400E" },
+  ADVISOR:   { bg: "#FCE7F3", fg: "#DB2777" },
 };
 
 function AnnounceTab({ readOnly }: { readOnly: boolean }) {
@@ -1837,7 +1848,7 @@ function statusStyle(s: AttStatus) {
     : { bg: "#FEE2E2", color: "#DC2626" };
 }
 
-function AttendanceTab() {
+function AttendanceTab({ readOnly = false }: { readOnly?: boolean }) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
   const thisMonth = today.slice(0, 7);
 
@@ -2013,7 +2024,7 @@ function AttendanceTab() {
                             <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: st.bg, color: st.color }}>
                               {statusLabel(s.status as AttStatus)}
                             </span>
-                            {s.status !== "ลา" && (
+                            {s.status !== "ลา" && !readOnly && (
                               <button onClick={() => setEditing(s.id)} className="text-xs text-gray-400 hover:text-gray-600 p-1">✏️</button>
                             )}
                           </div>
@@ -2057,11 +2068,13 @@ function AttendanceTab() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-gray-800 truncate">{l.user.nickname ?? l.user.name ?? "—"}</p>
-                          <button onClick={() => cancelLeave(l.id)} disabled={cancellingLeave === l.id}
-                            className="text-xs px-2 py-0.5 rounded-lg border shrink-0 disabled:opacity-40"
-                            style={{ borderColor: "#DC2626", color: "#DC2626" }}>
-                            {cancellingLeave === l.id ? "..." : "ยกเลิก"}
-                          </button>
+                          {!readOnly && (
+                            <button onClick={() => cancelLeave(l.id)} disabled={cancellingLeave === l.id}
+                              className="text-xs px-2 py-0.5 rounded-lg border shrink-0 disabled:opacity-40"
+                              style={{ borderColor: "#DC2626", color: "#DC2626" }}>
+                              {cancellingLeave === l.id ? "..." : "ยกเลิก"}
+                            </button>
+                          )}
                         </div>
                         <p className="text-xs text-gray-500">{fmtDate(l.startDate)} – {fmtDate(l.endDate)}</p>
                         <p className="text-xs text-gray-600 mt-0.5">{l.reason}</p>

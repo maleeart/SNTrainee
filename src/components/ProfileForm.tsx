@@ -7,12 +7,13 @@ import type { User } from "@prisma/client";
 
 const iso = (d: Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
-type PickedRole = "STUDENT" | "MENTOR" | "EXECUTIVE";
+type PickedRole = "STUDENT" | "MENTOR" | "EXECUTIVE" | "ADVISOR";
 
 const ROLE_OPTIONS: { role: PickedRole; label: string; sub: string; icon: string }[] = [
   { role: "STUDENT", label: "นักศึกษาฝึกงาน", sub: "บันทึกรายงานประจำวันและติดตามการประเมิน", icon: "🎓" },
   { role: "MENTOR", label: "พี่เลี้ยง", sub: "ตรวจสอบและประเมินผลงานนักศึกษาฝึกงาน", icon: "👷" },
   { role: "EXECUTIVE", label: "ผู้สังเกตการณ์", sub: "ดูภาพรวมและโหลดรายงาน ไม่สามารถแก้ไขได้", icon: "👁️" },
+  { role: "ADVISOR", label: "อาจารย์ที่ปรึกษา", sub: "ดูข้อมูลนักศึกษาและรายงานของสถานศึกษาตนเอง", icon: "👨‍🏫" },
 ];
 
 const OTHER = "__OTHER__";
@@ -29,7 +30,7 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
   // skip step 1 if already admin (role locked) or already profileDone (editing)
   const [step, setStep] = useState<1 | 2>(isAdmin || user.profileDone ? 2 : 1);
   const [pickedRole, setPickedRole] = useState<PickedRole>(
-    (["STUDENT", "MENTOR", "EXECUTIVE"].includes(user.role) ? user.role : "STUDENT") as PickedRole
+    (["STUDENT", "MENTOR", "EXECUTIVE", "ADVISOR"].includes(user.role) ? user.role : "STUDENT") as PickedRole
   );
 
   const [form, setForm] = useState({
@@ -47,7 +48,7 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
   const save = async () => {
     setErr("");
     if (!form.name.trim()) return setErr("กรุณากรอกชื่อ-นามสกุล");
-    if (pickedRole === "STUDENT" && !form.school.trim()) return setErr("กรุณาเลือกหรือกรอกสถานศึกษา");
+    if ((pickedRole === "STUDENT" || pickedRole === "ADVISOR") && !form.school.trim()) return setErr("กรุณาเลือกหรือกรอกสถานศึกษา");
     setSaving(true);
     const res = await fetch("/api/profile", {
       method: "POST",
@@ -108,6 +109,7 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
 
   /* ───── Step 2: กรอกข้อมูลส่วนตัว ───── */
   const isStudent = pickedRole === "STUDENT";
+  const isAdvisor = pickedRole === "ADVISOR";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ background: "#F4F6FB" }}>
@@ -140,17 +142,19 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
             </div>
           </div>
 
-          {isStudent && (
+          {(isStudent || isAdvisor) && (
             <>
               <div className="pt-1 pb-0.5" style={{ borderTop: "1px dashed #e5e7eb" }}>
-                <p className="text-xs text-gray-400 mb-3">ข้อมูลการศึกษา</p>
+                <p className="text-xs text-gray-400 mb-3">ข้อมูล{isAdvisor ? "สถานศึกษา" : "การศึกษา"}</p>
               </div>
-              <F label="ระดับชั้น *">
-                <select className="input" value={form.level} onChange={e => setForm({ ...form, level: e.target.value as "PVC" | "PVS" })}>
-                  <option value="PVC">ปวช.</option>
-                  <option value="PVS">ปวส.</option>
-                </select>
-              </F>
+              {isStudent && (
+                <F label="ระดับชั้น *">
+                  <select className="input" value={form.level} onChange={e => setForm({ ...form, level: e.target.value as "PVC" | "PVS" })}>
+                    <option value="PVC">ปวช.</option>
+                    <option value="PVS">ปวส.</option>
+                  </select>
+                </F>
+              )}
               <F label="สถานศึกษา *">
                 <select className="input" value={schoolPick}
                   onChange={e => {
@@ -171,17 +175,21 @@ export default function ProfileForm({ user, schools = [] }: { user: User & { nic
                     placeholder="พิมพ์ชื่อสถานศึกษา" />
                 </F>
               )}
-              <F label="อาจารย์นิเทศ">
-                <input className="input" value={form.advisor} onChange={e => setForm({ ...form, advisor: e.target.value })} placeholder="ชื่ออาจารย์ที่ดูแล" />
-              </F>
-              <div className="grid grid-cols-2 gap-3">
-                <F label="วันเริ่มฝึก">
-                  <input type="date" className="input" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} />
-                </F>
-                <F label="วันสิ้นสุด">
-                  <input type="date" className="input" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} />
-                </F>
-              </div>
+              {isStudent && (
+                <>
+                  <F label="อาจารย์นิเทศ">
+                    <input className="input" value={form.advisor} onChange={e => setForm({ ...form, advisor: e.target.value })} placeholder="ชื่ออาจารย์ที่ดูแล" />
+                  </F>
+                  <div className="grid grid-cols-2 gap-3">
+                    <F label="วันเริ่มฝึก">
+                      <input type="date" className="input" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} />
+                    </F>
+                    <F label="วันสิ้นสุด">
+                      <input type="date" className="input" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} />
+                    </F>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

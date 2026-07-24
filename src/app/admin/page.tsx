@@ -4,7 +4,7 @@ import { SCHOOL_PRESETS } from "@/lib/labels";
 import AdminView from "@/components/AdminView";
 
 export default async function AdminPage() {
-  const u = await requireUser(["ADMIN", "EXECUTIVE"]);
+  const u = await requireUser(["ADMIN", "EXECUTIVE", "ADVISOR"]);
 
   const me = await prisma.user.findUnique({
     where: { id: u.id },
@@ -13,10 +13,19 @@ export default async function AdminPage() {
 
   const [users, reports, fieldLessons] = await Promise.all([
     prisma.user.findMany({
+      where: u.role === "ADVISOR" ? {
+        OR: [
+          { role: "ADMIN" },
+          { school: u.school }
+        ]
+      } : {},
       orderBy: { role: "asc" },
       select: { id: true, name: true, nickname: true, email: true, image: true, role: true, level: true, school: true, advisor: true, startDate: true, endDate: true, profileDone: true, approved: true, requestedRole: true, rejected: true },
     }),
     prisma.report.findMany({
+      where: u.role === "ADVISOR" ? {
+        user: { school: u.school }
+      } : {},
       orderBy: [{ status: "asc" }, { date: "desc" }],
       include: {
         user: { select: { id: true, name: true, nickname: true, level: true, school: true } },
@@ -28,7 +37,15 @@ export default async function AdminPage() {
       where: { course: { fieldQuiz: true }, quiz: { isNot: null } },
       select: {
         id: true, title: true, createdAt: true,
-        quiz: { select: { attempts: { orderBy: { createdAt: "asc" }, select: { userId: true, score: true, createdAt: true } } } },
+        quiz: {
+          select: {
+            attempts: {
+              where: u.role === "ADVISOR" ? { user: { school: u.school } } : {},
+              orderBy: { createdAt: "asc" },
+              select: { userId: true, score: true, createdAt: true }
+            }
+          }
+        },
       },
     }),
   ]);
@@ -42,7 +59,7 @@ export default async function AdminPage() {
 
   return (
     <AdminView
-      readOnly={u.role === "EXECUTIVE"}
+      readOnly={u.role === "EXECUTIVE" || u.role === "ADVISOR"}
       meId={u.id}
       meName={u.name ?? ""}
       meNickname={me?.nickname}

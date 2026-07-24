@@ -28,7 +28,7 @@ type CourseData = {
 };
 
 function homeFor(role: string) {
-  if (role === "ADMIN" || role === "EXECUTIVE") return "/admin";
+  if (role === "ADMIN" || role === "EXECUTIVE" || role === "ADVISOR") return "/admin";
   if (role === "MENTOR") return "/mentor";
   return "/dashboard";
 }
@@ -698,6 +698,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
   const isAdmin = meRole === "ADMIN";
   const canSetFieldQuiz = meRole === "ADMIN" || meRole === "MENTOR";
   const isAdminOrExec = meRole === "ADMIN" || meRole === "EXECUTIVE";
+  const isAdminOrExecOrAdvisor = meRole === "ADMIN" || meRole === "EXECUTIVE" || meRole === "ADVISOR";
   // โจทย์ที่ deep-link มาจาก /training?lesson=<id> — เปิดค้างไว้ตั้งแต่ render แรก
   const deepLink = openLessonId
     ? initCourses
@@ -858,7 +859,7 @@ export default function TrainingView({ initCourses, meId, meRole, meName, meImag
                 {selected.lessons.some(l => l.quiz) && (
                   <CourseQuizResults courseId={selected.id} meId={meId} grouped={selected.fieldQuiz}
                     // พี่เลี้ยงเห็นผลรวมได้เฉพาะคอร์สโจทย์หน้างาน (API บังคับซ้ำอีกชั้น)
-                    isAdmin={isAdminOrExec || (!!selected.fieldQuiz && meRole === "MENTOR")} />
+                    isAdmin={isAdminOrExecOrAdvisor || (!!selected.fieldQuiz && meRole === "MENTOR")} />
                 )}
               </div>
             ) : (

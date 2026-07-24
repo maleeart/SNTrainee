@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   if (b.op === "edit") {
     if (!b.name?.trim()) return NextResponse.json({ error: "กรุณากรอกชื่อ" }, { status: 400 });
     const isStudent = b.role === "STUDENT";
+    const isAdvisor = b.role === "ADVISOR";
     const user = await prisma.user.update({
       where: { id: b.userId },
       data: {
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
         nickname: b.nickname?.trim() || null,
         role: b.role,
         level: isStudent ? (b.level || null) : null,
-        school: isStudent ? (b.school?.trim() || null) : null,
+        school: (isStudent || isAdvisor) ? (b.school?.trim() || null) : null,
         advisor: isStudent ? (b.advisor?.trim() || null) : null,
         startDate: isStudent && b.startDate ? new Date(b.startDate) : null,
         endDate: isStudent && b.endDate ? new Date(b.endDate) : null,
